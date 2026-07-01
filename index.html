@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kahoot!! 升級版 (整合 AI)</title>
+    <title>Kahoot!! 升級版 (免費公共 AI 版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -125,13 +125,13 @@
         
         <div id="ai-generate-panel" class="ai-generate-panel">
             <h3>✨ AI 自動生成題組</h3>
-            <label>📂 請上傳知識來源檔案 (支援任意格式，如 PDF, Word, TXT 等)</label>
-            <input type="file" id="ai-source-file">
+            <label>📂 請上傳知識來源檔案 (免費公共 AI 僅支援上傳 .txt, .csv 純文字檔)</label>
+            <input type="file" id="ai-source-file" accept=".txt,.csv,.md">
             
             <div style="display: flex; gap: 10px;">
                 <div style="flex: 1;">
                     <label>🔢 欲生成題目數量</label>
-                    <input type="number" id="ai-q-count" value="5" min="1" max="20">
+                    <input type="number" id="ai-q-count" value="5" min="1" max="10">
                 </div>
                 <div style="flex: 1;">
                     <label>⭐ 難易度</label>
@@ -234,11 +234,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // 🚨 填入您的 Gemini API Key 🚨
-        // ==========================================
-        const GEMINI_API_KEY = "請在此填入您的_Gemini_API_Key";
-
         let globalTimeLimit = 20; 
         let quizData = [];
         let localQuestionsCount = 0;
@@ -328,10 +323,11 @@
         }
 
         // ==========================================
-        // AI 相關功能區塊
+        // 免費 AI 網路資源 (使用 text.pollinations.ai)
+        // 完全不需註冊、不需 API Key 的開源文本生成服務
         // ==========================================
 
-        // 1. AI 根據資料自動生成題組 (無檔案格式限制，前端模擬展示)
+        // 1. 串接公共 API 根據文字檔自動生成題組
         async function generateQuizByAI() {
             const fileInput = document.getElementById('ai-source-file');
             const qCount = document.getElementById('ai-q-count').value;
@@ -339,37 +335,87 @@
             const btn = document.getElementById('btn-do-ai-generate');
 
             if (fileInput.files.length === 0) {
-                alert('請先選擇一個知識來源檔案！'); return;
+                alert('請先選擇一個純文字檔案！(如 .txt, .csv)'); return;
             }
+
             const file = fileInput.files[0];
-
             btn.disabled = true;
-            btn.innerText = "⏳ AI 正在閱讀資料並生成中...";
+            btn.innerText = "⏳ AI 正在閱讀資料並生成中 (可能需要十幾秒)...";
 
-            // 由於前端無法直接無損解析 PDF/Word，且要求無格式限制，這邊保留模擬產出的骨架。
-            // 實務上需將 FormData(file) 傳送至後端進行轉譯，再交由 AI 處理。
-            setTimeout(() => {
-                let importedQuestions = [];
-                for(let i=0; i<qCount; i++) {
-                    importedQuestions.push({
-                        q: `[AI生成 ${diff}] 根據您上傳的「${file.name}」產生的第 ${i+1} 題?`,
-                        opts: [`這是一號正確答案`, `這是干擾項 A`, `這是干擾項 B`, `這是干擾項 C`],
-                        ans: 0 
-                    });
+            try {
+                // 因為我們現在是將文字直接丟給公共文字 API，所以我們要在前端先讀取檔案內容
+                let fileContent = await file.text();
+                
+                // 為了避免檔案太大超過免費 API 的上限，我們擷取前 3000 字
+                if (fileContent.length > 3000) {
+                    fileContent = fileContent.substring(0, 3000) + "\n...(下略)";
+                }
+                
+                // 提示詞：嚴格規定 JSON 輸出格式
+                const prompt = `請根據以下內容資料，生成 ${qCount} 題難度為「${diff}」的選擇題。
+                請絕對只回傳一個純 JSON 陣列，不要包含任何 Markdown 語法 (如 \`\`\`json) 或其他說明文字。
+                JSON 陣列中的每個物件必須包含：
+                - "q": 題目敘述 (字串)
+                - "opts": 4個選項的陣列 (必須包含 1個正確選項 與 3個錯誤選項，長度為4)
+                - "ans": 正確選項在 opts 陣列中的索引值 (整數 0, 1, 2, 3)
+
+                [內容資料開始]
+                ${fileContent}
+                [內容資料結束]
+                
+                範例格式：
+                [
+                  {"q": "題目1的敘述", "opts": ["選項A", "選項B", "選項C", "選項D"], "ans": 1},
+                  {"q": "題目2的敘述", "opts": ["選項A", "選項B", "選項C", "選項D"], "ans": 3}
+                ]`;
+
+                // 呼叫免金鑰的 text.pollinations.ai
+                const response = await fetch('https://text.pollinations.ai/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        messages: [
+                            { role: 'system', content: 'You are an API that only returns valid JSON arrays. Do not add any extra text.' },
+                            { role: 'user', content: prompt }
+                        ],
+                        jsonMode: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`免費公共 API 請求失敗: ${response.status}`);
+                }
+                
+                let textOutput = await response.text();
+                
+                // 清理可能出現的 markdown 標籤
+                textOutput = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const generatedQuestions = JSON.parse(textOutput);
+                
+                if (!Array.isArray(generatedQuestions)) {
+                    throw new Error("AI 回傳的格式不如預期 (非陣列)");
                 }
 
+                // 切換至編輯介面並清空現有題目
                 createNewQuizSetUI();
                 document.getElementById('sub-questions-list').innerHTML = '';
                 localQuestionsCount = 0;
-                importedQuestions.forEach(q => addQuestionInnerBlock(q));
                 
-                alert(`✨ AI 成功幫您根據 ${file.name} 生成了 ${qCount} 題 ${diff} 難度的題目！`);
+                // 填入 UI
+                generatedQuestions.forEach(q => addQuestionInnerBlock(q));
+                
+                alert(`✨ 成功！AI 已根據您的檔案為您生成了 ${generatedQuestions.length} 題 ${diff} 難度的題目！\n\n您可以檢閱並進行手動修改。`);
+                
+            } catch (error) {
+                console.error("AI 生成題組錯誤:", error);
+                alert("生成失敗！\n\n可能原因：\n1. 您上傳的不是純文字檔\n2. 檔案內容太亂導致 AI 解析失敗\n3. 免費公共 API 目前繁忙\n\n詳細錯誤: " + error.message);
+            } finally {
                 btn.disabled = false;
                 btn.innerText = "🚀 開始生成";
-            }, 2500);
+            }
         }
 
-        // 2. 串接真實 Gemini API 生成錯誤選項
+        // 2. 串接公共 API 生成錯誤選項
         async function generateWrongOptionsAI(btnElement, blockIdx) {
             const block = document.getElementById(`inner-q-block-${blockIdx}`);
             const title = block.querySelector('.q-title').value.trim();
@@ -382,31 +428,29 @@
                 return;
             }
 
-            if (!GEMINI_API_KEY || GEMINI_API_KEY === "請在此填入您的_Gemini_API_Key") {
-                alert("請先在原始碼中設定您的 GEMINI_API_KEY！");
-                return;
-            }
-
             btnElement.disabled = true;
             const originalText = btnElement.innerText;
-            btnElement.innerText = "⏳ Gemini 思考中...";
+            btnElement.innerText = "⏳ AI 思考中...";
 
             try {
                 const prompt = `我正在製作一個選擇題。題目是：「${title}」，正確答案是：「${correctAns}」。請幫我生成 3 個「合理但錯誤」的干擾選項。請絕對只回傳一個包含 3 個字串的 JSON 陣列格式，不要包含任何 Markdown 語法 (如 \`\`\`json)、不要換行、不要有任何其他說明文字。範例格式：["錯1", "錯2", "錯3"]`;
 
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                // 呼叫免金鑰的 text.pollinations.ai
+                const response = await fetch('https://text.pollinations.ai/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: 0.7 }
+                        messages: [
+                            { role: 'system', content: 'You are an API that only returns valid JSON arrays. Do not add any extra text.' },
+                            { role: 'user', content: prompt }
+                        ],
+                        jsonMode: true
                     })
                 });
 
                 if (!response.ok) throw new Error(`API 請求失敗: ${response.status}`);
                 
-                const data = await response.json();
-                let textOutput = data.candidates[0].content.parts[0].text.trim();
+                let textOutput = await response.text();
                 textOutput = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
 
                 const wrongOptions = JSON.parse(textOutput);
@@ -423,7 +467,7 @@
                 }
             } catch (error) {
                 console.error("AI 生成錯誤:", error);
-                alert("生成失敗，請檢查 API Key 或開啟 F12 開發者工具。\n詳細錯誤: " + error.message);
+                alert("生成失敗，可能是免費 API 伺服器繁忙，請稍後再試。\n詳細錯誤: " + error.message);
             } finally {
                 btnElement.disabled = false;
                 btnElement.innerText = originalText;
