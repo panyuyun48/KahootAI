@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kahoot!! (AI 整合版)</title>
-    
+    <title>Kahoot!! (整合AI版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -20,576 +19,627 @@
             --purple: #46178f; --dark: #1a1a1a; --white: #ffffff;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #f2f2f2; color: var(--dark); overflow-x: hidden; transition: padding-right 0.3s; }
+        body { background-color: #f2f2f2; color: var(--dark); overflow-x: hidden; }
         
-        body.host-mode { padding-right: 280px; }
-        
-        .screen { display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; position: relative; min-height: 100vh; }
+        .screen { display: none; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; position: relative; }
         .screen.active { display: flex; }
         
         .btn-main { background-color: var(--purple); color: white; border: none; padding: 12px 35px; font-size: 20px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-top: 15px; }
         .btn-main:hover { transform: scale(1.03); background-color: #361071; }
         .btn-main:disabled { background-color: #aaa; cursor: not-allowed; transform: none; }
         
+        /* 題組與編輯器樣式 */
         .quiz-set-container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 700px; text-align: left; margin-bottom: 25px; max-height: 65vh; overflow-y: auto; color: var(--dark); position: relative; }
-        .q-editor-block { border-left: 4px solid var(--purple); padding-left: 15px; margin: 20px 0; background: #fafafa; padding: 15px; border-radius: 0 8px 8px 0; transition: transform 0.2s; }
+        .q-editor-block { border-left: 4px solid var(--purple); padding-left: 15px; margin: 20px 0; background: #fafafa; padding: 15px; border-radius: 0 8px 8px 0; }
         .q-editor-block h4 { color: var(--purple); margin-bottom: 10px; }
         
-        .btn-ctrl { background: #e0e0e0; border: none; padding: 6px 12px; margin-left: 5px; cursor: pointer; border-radius: 6px; font-weight: bold; transition: 0.2s; color: var(--dark); }
-        .btn-ctrl:hover { background: #d0d0d0; }
-        .btn-delete { background: rgba(226, 27, 60, 0.1); color: var(--red); }
-        .btn-delete:hover { background: var(--red); color: white; }
-
         .quiz-set-container label { display: block; font-weight: bold; margin-top: 10px; color: #444; }
         .quiz-set-container input, .quiz-set-container select { width: 100%; padding: 10px; margin: 6px 0 12px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; display: block; }
-        .opt-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         
-        /* [新增] AI 面板樣式 */
-        .ai-btn { background: linear-gradient(90deg, #ff007f, #7000ff); color: white; border: none; border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 5px; }
-        .ai-btn:hover { opacity: 0.9; transform: scale(1.02); }
-        .ai-btn:disabled { background: #ccc; cursor: wait; }
-        .ai-generate-panel { background: rgba(70, 23, 143, 0.05); border: 2px dashed var(--purple); border-radius: 12px; padding: 20px; width: 100%; max-width: 700px; margin-bottom: 20px; display: none; text-align: left; }
-        .ai-generate-panel h3 { color: var(--purple); margin-bottom: 15px; }
+        .opt-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         
         #qrcode { background: white; padding: 20px; border-radius: 12px; margin: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .pin-display { font-size: 48px; font-weight: bold; color: var(--purple); margin: 10px 0; letter-spacing: 2px; }
         
         .player-list { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; max-width: 800px; margin-top: 30px; }
-        .player-badge { background: white; padding: 8px 18px; border-radius: 30px; font-size: 20px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid var(--purple); display: flex; align-items: center; gap: 10px; }
+        .player-badge { background: white; padding: 8px 18px; border-radius: 30px; font-size: 20px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid var(--purple); display: flex; align-items: center; gap: 10px; animation: pop 0.3s ease; }
+        
         .player-badge.offline { opacity: 0.55; background: #e0e0e0; border-color: #999; color: #555; }
         
-        /* 其他遊戲介面樣式 */
-        #screen-host-quiz { padding: 20px 40px; justify-content: flex-start; overflow-y: auto; }
-        .timer-circle { width: 85px; height: 85px; border-radius: 50%; background: var(--purple); color: white; font-size: 32px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 10px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
-        .question-text { font-size: 38px; font-weight: bold; margin-bottom: 15px; padding: 0 20px; text-align: center; width: 100%; max-width: 1400px; word-break: break-word; } 
-        
-        .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; width: 100%; max-width: 1400px; }
-        .option-card { font-size: 32px; font-weight: bold; color: white; border-radius: 12px; display: flex; align-items: center; justify-content: flex-start; gap: 20px; padding: 20px 30px; }
+        .btn-kick { background: rgba(226, 27, 60, 0.1); color: var(--red); border: none; border-radius: 50%; width: 26px; height: 26px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-weight: bold; }
+        .btn-kick:hover { background: var(--red); color: white; }
+
+        .persistent-lobby-info { position: absolute; top: 15px; right: 15px; background: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 2px solid var(--purple); display: none; flex-direction: column; align-items: center; z-index: 999; width: 220px; }
+        .persistent-lobby-info.visible { display: flex; }
+        .persistent-pin { font-size: 16px; font-weight: bold; color: var(--purple); margin-bottom: 5px; }
+        .persistent-qr { background: white; padding: 4px; border-radius: 4px; margin-bottom: 8px; }
+        .persistent-players-header { font-size: 13px; font-weight: bold; color: #555; width: 100%; text-align: left; border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 4px; }
+        .persistent-players-list { width: 100%; max-height: 150px; overflow-y: auto; margin-top: 5px; text-align: left; }
+        .p-list-item { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+        .p-list-item.offline { opacity: 0.55; color: #777; }
+
+        .quiz-progress-text { font-size: 22px; font-weight: bold; color: var(--purple); background: rgba(70, 23, 143, 0.1); padding: 6px 20px; border-radius: 20px; margin-bottom: 5px; }
+        .timer-circle { width: 85px; height: 85px; border-radius: 50%; background: var(--purple); color: white; font-size: 32px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 15px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .question-text { font-size: 36px; font-weight: bold; margin-bottom: 30px; padding: 0 20px; text-align: center; width: 100%; max-width: 1100px; } 
+        .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; width: 100%; max-width: 1100px; padding: 10px; margin: 0 auto; }
+        .option-card { padding: 25px; font-size: 24px; font-weight: bold; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.2s; text-align: center; }
         .option-card.fade-out { opacity: 0.25; transform: scale(0.95); }
-        .option-card.correct-highlight { border: 8px solid #fff; box-shadow: 0 0 30px rgba(0,0,0,0.5); z-index: 10; }
+        .option-card.correct-highlight { border: 5px solid #fff; box-shadow: 0 0 20px rgba(0,0,0,0.4); z-index: 10; }
         
         .opt-0 { background-color: var(--red); } .opt-1 { background-color: var(--blue); }
         .opt-2 { background-color: var(--yellow); } .opt-3 { background-color: var(--green); }
         
-        .option-shape { width: 45px; height: 45px; display: inline-block; background-color: white; flex-shrink: 0; }
+        .option-shape { width: 30px; height: 30px; display: inline-block; background-color: white; flex-shrink: 0; }
         .shape-0 { border-radius: 50%; } 
-        .shape-1 { transform: rotate(45deg); width: 36px; height: 36px; margin: 0 5px; } 
-        .shape-2 { border-radius: 6px; } 
-        .shape-3 { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 50px; height: 45px; background-color: white; }
+        .shape-1 { transform: rotate(45deg); width: 24px; height: 24px; margin: 0 3px; } 
+        .shape-2 { border-radius: 3px; } 
+        .shape-3 { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 34px; height: 30px; background-color: white; }
         
-        /* 手機端樣式 */
-        .pad-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; width: 100%; height: calc(100vh - 150px); }
-        .pad-btn { border: none; border-radius: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; color: white; width: 100%; height: 100%; }
+        .chart-container { width: 100%; max-width: 650px; height: 320px; margin: 15px auto; }
+        .leaderboard-list { width: 100%; max-width: 600px; margin: 20px 0; }
+        .leaderboard-item { display: flex; justify-content: space-between; background: white; padding: 15px 25px; margin-bottom: 10px; border-radius: 6px; font-size: 22px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .leaderboard-item.offline-player { opacity: 0.45; background: #e8e8e8; color: #777; box-shadow: none; border: 1px dashed #ccc; }
+
+        .pad-screen { padding: 10px; background: #f5f5f5; justify-content: flex-start; }
+        .pad-quiz-header { width: 100%; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 10px; text-align: center; border-bottom: 4px solid var(--purple); margin-top: 35px; } 
+        .pad-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; height: calc(100vh - 160px); }
+        .pad-btn { border: none; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; color: white; font-size: 18px; font-weight: bold; }
         .pad-btn:active { opacity: 0.7; }
+        .pad-opt-text { margin-top: 10px; word-break: break-word; text-align: center; font-size: 16px;}
+        
+        .status-msg { font-size: 24px; font-weight: bold; color: #555; white-space: pre-line; line-height: 1.4; }
+        .input-group { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 90%; max-width: 400px; }
+        .input-group input { width: 100%; padding: 12px; font-size: 18px; margin: 15px 0; border: 2px solid #ccc; border-radius: 6px; text-align: center; }
+        
+        #player-nickname-badge { display: none; position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: white; padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: bold; z-index: 9999; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+        @keyframes pop { 0% { transform: scale(0.7); } 100% { transform: scale(1); } }
+        @media(max-width: 768px) { 
+            .options-grid { grid-template-columns: 1fr; } 
+            .option-card { font-size: 18px; padding: 15px; } 
+            .opt-row { grid-template-columns: 1fr; }
+            .persistent-lobby-info { position: static; margin-bottom: 15px; width: 100%; max-width: 400px; } 
+        }
     </style>
 </head>
 <body>
 
-<div id="screen-welcome" class="screen active">
-    <h1 style="font-size: 64px; color: var(--purple); font-weight: 900; margin-bottom: 10px;">Kahoot!!</h1>
-    <p style="font-size: 20px; color: #555; margin-bottom: 40px; font-weight: bold;">(整合 AI 版)</p>
-    
-    <div style="display:flex; gap: 15px; margin-bottom: 20px;">
-        <button class="btn-main" onclick="switchScreen('screen-editor')">建立新遊戲 (房長)</button>
-        <button class="btn-main ai-btn" onclick="document.getElementById('ai-generate-panel').style.display='block';" style="margin-top: 15px; padding: 12px 35px; font-size: 20px;">✨ AI 自動生成題組</button>
+    <div id="player-nickname-badge">👤 <span id="display-player-name"></span></div>
+
+    <div id="global-persistent-panel" class="persistent-lobby-info">
+        <div class="persistent-pin">房間 ID: <span id="persist-pin-text">----</span></div>
+        <div id="persist-qrcode" class="persistent-qr"></div>
+        <div class="persistent-players-header">線上玩家 (<span id="persist-count">0</span>)：</div>
+        <div class="persistent-players-list" id="persist-players-dom"></div>
     </div>
-    
-    <div id="ai-generate-panel" class="ai-generate-panel">
-        <h3>✨ 上傳檔案讓 AI 幫您出題</h3>
-        <label>1. 上傳教材 (支援 PDF, Word, Excel, TXT)</label>
-        <input type="file" id="ai-source-file" accept=".pdf,.docx,.xlsx,.txt">
+
+    <div id="screen-welcome" class="screen active" style="background: linear-gradient(135deg, #46178f 0%, #250854 100%); color: white; justify-content: flex-start; overflow-y: auto; padding-top: 40px;">
+        <h1>Kahoot!! FAKE</h1>
+        <p style="margin: 10px 0 20px 0; opacity: 0.8;">您可以新增題組、或是直接匯入現有的題組 TXT 檔案！</p>
         
-        <label>2. 生成題數</label>
-        <input type="number" id="ai-q-count" value="5" min="1" max="20">
-        
-        <label>3. 難度</label>
-        <select id="ai-q-difficulty">
-            <option value="簡單">簡單</option>
-            <option value="中等" selected>中等</option>
-            <option value="困難">困難</option>
-        </select>
-        
-        <label>4. 填入 OpenAI API Key</label>
-        <input type="password" id="ai-api-key" placeholder="sk-...">
-        
-        <div style="text-align:right;">
-            <button class="btn-main" style="background:#888; font-size:16px;" onclick="document.getElementById('ai-generate-panel').style.display='none';">取消</button>
-            <button class="btn-main ai-btn" id="btn-do-ai-gen" style="font-size:16px;" onclick="generateQuizByAI(this)">開始生成題組</button>
+        <div id="quiz-workspace" style="width: 100%; display: flex; flex-direction: column; align-items: center;"></div>
+        <input type="file" id="file-import-input" accept=".txt" style="display: none;" onchange="handleFileImport(event)">
+
+        <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center;" id="welcome-action-buttons">
+            <button id="btn-add-set" class="btn-main" style="background:#00c853;" onclick="createNewQuizSetUI()">＋ 新增題組</button>
+            
+            <button id="btn-ai-generate" class="btn-main" style="background:#ff007f;" onclick="document.getElementById('ai-generate-panel').style.display='block'">✨ AI 自動生成題組</button>
+            
+            <button id="btn-import-set" class="btn-main" style="background:#00e5ff; color:#1a1a1a;" onclick="document.getElementById('file-import-input').click()">📂 匯入文字檔 (.txt)</button>
+            <button id="btn-download-template" class="btn-main" style="background:#8e44ad;" onclick="downloadTemplate()">📄 下載題組模板</button>
+            
+            <button id="btn-editor-back" class="btn-main" style="background:#666; display:none;" onclick="location.reload()">✕ 關閉返回</button>
+            <button id="btn-export-set" class="btn-main" style="background:#ff9100; display:none;" onclick="exportQuizSetToFile()">💾 匯出並下載 (.txt)</button>
+            <button id="btn-host-start" class="btn-main" style="display:none;" onclick="initHost()">開啟大螢幕主台 (Host)</button>
+        </div>
+
+        <div id="ai-generate-panel" style="display:none; background: rgba(255, 255, 255, 0.95); border: 2px dashed #ff007f; border-radius: 12px; padding: 25px; width: 100%; max-width: 700px; margin-bottom: 20px; text-align: left; color: #333;">
+            <h3 style="color: #ff007f; margin-bottom: 15px;">✨ 上傳檔案讓 AI 幫您出題</h3>
+            <label style="display:block; font-weight:bold; margin-top:10px;">1. 上傳教材 (支援 PDF, Word, Excel, TXT)</label>
+            <input type="file" id="ai-source-file" accept=".pdf,.docx,.xlsx,.txt" style="width:100%; padding:8px; margin:6px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <label style="display:block; font-weight:bold; margin-top:10px;">2. 生成題數</label>
+            <input type="number" id="ai-q-count" value="5" min="1" max="20" style="width:100%; padding:8px; margin:6px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <label style="display:block; font-weight:bold; margin-top:10px;">3. 難度</label>
+            <select id="ai-q-difficulty" style="width:100%; padding:8px; margin:6px 0; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="簡單">簡單</option>
+                <option value="中等" selected>中等</option>
+                <option value="困難">困難</option>
+            </select>
+            <label style="display:block; font-weight:bold; margin-top:10px;">4. 填入 OpenAI API Key</label>
+            <input type="password" id="ai-api-key" placeholder="sk-..." style="width:100%; padding:8px; margin:6px 0; border: 1px solid #ccc; border-radius: 4px;">
+            <div style="text-align:right; margin-top: 15px;">
+                <button class="btn-main" style="background:#888; font-size:16px; padding:8px 15px;" onclick="document.getElementById('ai-generate-panel').style.display='none';">取消</button>
+                <button class="btn-main" id="btn-do-ai-gen" style="background:#ff007f; font-size:16px; padding:8px 15px;" onclick="generateQuizByAI(this)">開始生成題組</button>
+            </div>
+        </div>
+
+        <hr style="width:100%; max-width:700px; opacity:0.2; margin:10px 0;" id="welcome-divider">
+        <button id="btn-manual-join" class="btn-main" style="background:#0085ff; margin-top:10px;" onclick="switchScreen('screen-pad-login')">玩家 (Player) 加入遊戲</button>
+    </div>
+
+    <div id="screen-host-lobby" class="screen">
+        <h2>📢 玩家加入中...</h2>
+        <div id="qrcode"></div>
+        <div class="pin-display">房間 ID: <span id="room-pin-text">---</span></div>
+        <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">目前狀態名單 (在線: <span id="player-count">0</span>):</div>
+        <div class="player-list" id="lobby-players"></div>
+        <button id="btn-start-game" class="btn-main" style="display:none;" onclick="startQuiz()">開始遊戲</button>
+    </div>
+
+    <div id="screen-host-quiz" class="screen">
+        <div class="quiz-progress-text" id="host-quiz-progress">題目 0 / 0</div>
+        <div class="timer-circle" id="host-timer">20</div>
+        <div class="question-text" id="host-question">題目載入中...</div>
+        <div class="options-grid" id="host-options"></div>
+        <div style="margin-top:25px; font-size:18px; font-weight: bold; display: flex; gap:20px; align-items:center;" id="host-footer-btn-zone">
+            <span id="answer-counter" style="color:#666;">已答題人數: 0</span>
+            <button class="btn-main" id="btn-reveal" style="display:none; padding:8px 20px; margin:0;" onclick="revealAnswer()">手動開牌 (結束作答)</button>
         </div>
     </div>
 
-    <button class="btn-main" style="background: #0085ff; font-size: 28px; padding: 20px 50px; border-radius: 50px;" onclick="switchScreen('screen-pad-join')">我是玩家 (進入遊戲)</button>
-</div>
-
-<div id="screen-editor" class="screen">
-    <h2>編輯遊戲題組</h2>
-    <div class="quiz-set-container" id="current-quiz-set">
-        <label>預設單題作答時間：</label>
-        <select id="set-global-time">
-            <option value="10">10 秒</option>
-            <option value="20" selected>20 秒</option>
-            <option value="30">30 秒</option>
-            <option value="60">60 秒</option>
-            <option value="0">不限時</option>
-        </select>
-        <div id="sub-questions-list"></div>
-        <button class="btn-main" style="width:100%; margin-top:20px; background:#26890c;" onclick="addQuestionInnerBlock()">+ 新增一題</button>
+    <div id="screen-host-rank" class="screen">
+        <h2 id="rank-title">目前積分榜</h2>
+        <div class="leaderboard-list" id="leaderboard-dom"></div>
+        <button class="btn-main" id="btn-next" onclick="nextQuestion()">下一題 ❯</button>
     </div>
-    <div>
-        <button class="btn-main" onclick="switchScreen('screen-welcome')" style="background:#666;">返回</button>
-        <button class="btn-main" onclick="hostGame()">創建房間並開始</button>
+
+    <div id="screen-pad-login" class="screen" style="background: var(--purple);">
+        <div class="input-group">
+            <h3 style="color:var(--purple); text-align:center;">加入 Kahoot 遊戲</h3>
+            <input type="text" id="pad-pin-input" placeholder="請輸入房間 ID">
+            <input type="text" id="pad-name-input" placeholder="請輸入您的暱稱" maxlength="10">
+            <button class="btn-main" style="width:100%; margin-top:5px;" onclick="connectToHost()">進入遊戲</button>
+            <button class="btn-main" style="width:100%; margin-top:10px; background:#666; font-size:14px; padding:5px;" onclick="location.reload()">返回首頁</button>
+        </div>
     </div>
-</div>
 
-<div id="screen-host-lobby" class="screen">
-    <h2>房間已建立！請玩家掃描或輸入 ID</h2>
-    <div class="pin-display">ID: <span id="room-pin">----</span></div>
-    <div id="qrcode"></div>
-    <h3>在線玩家: <span id="player-count">0</span></h3>
-    <div class="player-list" id="lobby-players"></div>
-    <button id="btn-start-game" class="btn-main" style="display:none; font-size: 24px;" onclick="startQuiz()">開始遊戲</button>
-</div>
-
-<div id="screen-host-quiz" class="screen">
-    <div class="quiz-progress-text" id="quiz-progress">題目 1 / 5</div>
-    <div class="timer-circle" id="host-timer">20</div>
-    <div class="question-text" id="host-q-title">題目載入中...</div>
-    <div class="options-grid" id="host-options"></div>
-    <button class="btn-main" id="btn-next-q" style="display:none; margin-top:30px;" onclick="nextQuestion()">下一題</button>
-</div>
-
-<div id="screen-host-leaderboard" class="screen">
-    <h2 style="font-size: 48px; color: var(--purple); margin-bottom: 20px;">🏆 排行榜 🏆</h2>
-    <div class="leaderboard-list" id="leaderboard-dom"></div>
-    <button class="btn-main" id="btn-leaderboard-next" onclick="nextQuestion()">下一題</button>
-</div>
-
-<div id="screen-pad-join" class="screen">
-    <h2>加入遊戲</h2>
-    <input type="text" id="pad-pin-input" placeholder="房間 ID" style="padding:10px; font-size:20px; margin:10px 0; width: 80%; max-width: 300px; display:block; border-radius:8px; border:1px solid #ccc;">
-    <input type="text" id="pad-name-input" placeholder="您的暱稱" maxlength="10" style="padding:10px; font-size:20px; margin:10px 0; width: 80%; max-width: 300px; display:block; border-radius:8px; border:1px solid #ccc;">
-    <button class="btn-main" onclick="connectToHost()">進入</button>
-</div>
-
-<div id="screen-pad-wait" class="screen">
-    <h2 id="pad-wait-msg">等待主持人開始...</h2>
-</div>
-
-<div id="screen-pad-play" class="screen pad-screen">
-    <h3 id="pad-q-title" style="margin-bottom:15px; font-size:20px;">請看大螢幕作答</h3>
-    <div class="pad-grid">
-        <button class="pad-btn opt-0" onclick="submitAnswer(0)"><span class="option-shape shape-0"></span></button>
-        <button class="pad-btn opt-1" onclick="submitAnswer(1)"><span class="option-shape shape-1"></span></button>
-        <button class="pad-btn opt-2" onclick="submitAnswer(2)"><span class="option-shape shape-2"></span></button>
-        <button class="pad-btn opt-3" onclick="submitAnswer(3)"><span class="option-shape shape-3"></span></button>
+    <div id="screen-pad-wait" class="screen" style="background: var(--blue); color:white;">
+        <div class="status-msg" style="color:white;" id="pad-wait-msg">成功加入！請看大螢幕等待開賽...</div>
     </div>
-</div>
 
-<script>
-    // === 全域變數 ===
-    let peer = null, connMap = new Map();
-    let hostId = null, myNickname = "";
-    let quizData = [], currentIdx = 0, globalTimeLimit = 20;
-    let playerData = {}, roundAnswers = {}, isAcceptingAnswers = false;
-    let timerInterval, timeLeft = 0, questionStartTime = 0;
+    <div id="screen-pad-game" class="screen pad-screen">
+        <div class="pad-quiz-header">
+            <div id="pad-header-index" style="font-size:14px; font-weight:bold; color:var(--purple);">題目 - / -</div>
+            <div id="pad-header-title" style="font-size:18px; font-weight:bold; color:#1a1a1a; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">題目名稱載入中...</div>
+        </div>
+        <div class="pad-grid">
+            <button class="pad-btn opt-0" onclick="submitAnswer(0)"><span class="option-shape shape-0"></span><span class="pad-opt-text"></span></button>
+            <button class="pad-btn opt-1" onclick="submitAnswer(1)"><span class="option-shape shape-1"></span><span class="pad-opt-text"></span></button>
+            <button class="pad-btn opt-2" onclick="submitAnswer(2)"><span class="option-shape shape-2"></span><span class="pad-opt-text"></span></button>
+            <button class="pad-btn opt-3" onclick="submitAnswer(3)"><span class="option-shape shape-3"></span><span class="pad-opt-text"></span></button>
+        </div>
+    </div>
 
-    // === 基本流程函數 ===
-    function switchScreen(id) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-    }
+    <div id="screen-pad-result" class="screen" style="color:white;">
+        <h1 id="pad-result-title" style="font-size: 32px;">已送出答案</h1>
+        <p style="font-size:22px; margin-top:20px; white-space: pre-line; background: rgba(0,0,0,0.2); padding: 15px 30px; border-radius: 12px;" id="pad-result-score">+0 分</p>
+    </div>
 
-    // 編輯器: 新增題目 (含 AI 錯誤選項生成按鈕)
-    function addQuestionInnerBlock(prefill = null) {
-        const listContainer = document.getElementById('sub-questions-list');
-        const bIdx = listContainer.children.length;
-        const block = document.createElement('div');
-        block.className = 'q-editor-block';
-        block.id = `inner-q-block-${bIdx}`;
-        
-        let opts = prefill ? prefill.opts : ['', '', '', ''];
-        let ans = prefill ? prefill.ans : 0;
-        
-        block.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h4 class="q-block-header">題目 #${bIdx + 1}</h4>
-                <button type="button" class="ai-btn" onclick="generateDistractors(this, ${bIdx})">✨ AI 生成錯誤選項</button>
-            </div>
-            <label>題目敘述：</label>
-            <input type="text" class="q-title" value="${prefill ? prefill.q : ''}" placeholder="請輸入題目">
-            <label>選擇正確答案位置：</label>
-            <select class="q-ans">
-                <option value="0" ${ans === 0 ? 'selected' : ''}>選項 1 (紅色)</option>
-                <option value="1" ${ans === 1 ? 'selected' : ''}>選項 2 (藍色)</option>
-                <option value="2" ${ans === 2 ? 'selected' : ''}>選項 3 (黃色)</option>
-                <option value="3" ${ans === 3 ? 'selected' : ''}>選項 4 (綠色)</option>
-            </select>
-            <div class="opt-row">
-                <input type="text" class="q-opt" value="${opts[0]}" placeholder="選項 1 (紅)">
-                <input type="text" class="q-opt" value="${opts[1]}" placeholder="選項 2 (藍)">
-                <input type="text" class="q-opt" value="${opts[2]}" placeholder="選項 3 (黃)">
-                <input type="text" class="q-opt" value="${opts[3]}" placeholder="選項 4 (綠)">
-            </div>
-            <button class="btn-ctrl btn-delete" onclick="this.parentElement.remove();">刪除此題</button>
-        `;
-        listContainer.appendChild(block);
-    }
+    <div id="screen-pad-final" class="screen" style="background: linear-gradient(135deg, #110326 0%, #46178f 100%); color:white;">
+        <h1 style="font-size: 36px; margin-bottom: 10px;">🏁 遊戲結束！</h1>
+        <div id="pad-final-rank" style="font-size: 28px; font-weight: bold; margin: 20px 0; color: #ffeb3b;">第 -- 名</div>
+        <div id="pad-final-score" style="font-size: 24px; background: rgba(255,255,255,0.1); padding: 15px 40px; border-radius: 50px; font-weight: bold;">總積分: 0 pts</div>
+        <button class="btn-main" style="background:#666; margin-top:40px; font-size:16px;" onclick="location.reload()">返回首頁</button>
+    </div>
 
-    // 編輯器: 儲存題目並啟動伺服器
-    function hostGame() {
-        quizData = [];
-        const blocks = document.querySelectorAll('.q-editor-block');
-        blocks.forEach(block => {
-            const q = block.querySelector('.q-title').value.trim();
-            const ans = parseInt(block.querySelector('.q-ans').value);
-            const opts = Array.from(block.querySelectorAll('.q-opt')).map(inp => inp.value.trim());
-            if (q && opts.every(o => o !== '')) {
-                quizData.push({ q, opts, ans });
+    <script>
+        let globalTimeLimit = 20; 
+        let quizData = [];
+        let localQuestionsCount = 0;
+
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const rId = urlParams.get('room');
+            if (rId) {
+                switchScreen('screen-pad-login');
+                document.getElementById('pad-pin-input').value = rId;
             }
-        });
-        
-        if(quizData.length === 0) return alert("請至少完整輸入一題！");
-        
-        peer = new Peer();
-        peer.on('open', id => {
-            hostId = id;
-            document.getElementById('room-pin').innerText = id;
-            document.getElementById('qrcode').innerHTML = '';
-            new QRCode(document.getElementById("qrcode"), { text: id, width: 200, height: 200 });
+        };
+
+        function createNewQuizSetUI() {
+            document.getElementById('quiz-workspace').innerHTML = `
+                <div class="quiz-set-container" id="current-quiz-set">
+                    <h3 style="color:var(--purple); border-bottom:2px solid #eee; padding-bottom:10px; width:100%;">📋 專屬自訂題組</h3>
+                    <label>⏱️ 整個題組答題時間統一設定：</label>
+                    <select id="set-global-time">
+                        <option value="10">10 秒</option>
+                        <option value="20" selected>20 秒</option>
+                        <option value="30">30 秒</option>
+                        <option value="60">60 秒</option>
+                    </select>
+                    <div id="sub-questions-list"></div>
+                    <button class="btn-main" style="background:#0085ff; font-size:16px; padding:8px 20px; width:100%;" onclick="addQuestionInnerBlock()">＋ 在此題組內新增題目</button>
+                </div>
+            `;
+            localQuestionsCount = 0;
+            addQuestionInnerBlock(); 
+            
+            document.getElementById('btn-add-set').style.display = 'none';
+            document.getElementById('btn-ai-generate').style.display = 'none'; // 新增
+            document.getElementById('btn-import-set').style.display = 'none';
+            document.getElementById('btn-download-template').style.display = 'none';
+            document.getElementById('btn-manual-join').style.display = 'none';
+            document.getElementById('welcome-divider').style.display = 'none';
+            
+            document.getElementById('btn-editor-back').style.display = 'inline-block';
+            document.getElementById('btn-export-set').style.display = 'inline-block';
+            document.getElementById('btn-host-start').style.display = 'inline-block';
+        }
+
+        function addQuestionInnerBlock(prefill = null) {
+            const listContainer = document.getElementById('sub-questions-list');
+            const bIdx = localQuestionsCount;
+            const block = document.createElement('div');
+            block.className = 'q-editor-block';
+            block.id = `inner-q-block-${bIdx}`;
+            
+            // [新增] 插入 AI 生成錯誤選項按鈕
+            block.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h4>題目 #${bIdx + 1}</h4>
+                    <button type="button" class="btn-main" style="background:#ff007f; padding:5px 10px; font-size:14px; margin:0;" onclick="generateDistractors(this, ${bIdx})">✨ AI 生成錯誤選項</button>
+                </div>
+                <label>題目敘述：</label>
+                <input type="text" class="q-title" value="${prefill ? prefill.q : ''}" placeholder="請輸入搶答題目">
+                <div class="opt-row">
+                    <div><label>🔴 選項一 (圓形)：</label><input type="text" class="q-opt-0" value="${prefill ? prefill.opts[0] : ''}" placeholder="答案一"></div>
+                    <div><label>🔵 選項二 (菱形)：</label><input type="text" class="q-opt-1" value="${prefill ? prefill.opts[1] : ''}" placeholder="答案二"></div>
+                    <div><label>🟡 選項三 (正方形)：</label><input type="text" class="q-opt-2" value="${prefill ? prefill.opts[2] : ''}" placeholder="答案三"></div>
+                    <div><label>🟢 選項四 (三角形)：</label><input type="text" class="q-opt-3" value="${prefill ? prefill.opts[3] : ''}" placeholder="答案四"></div>
+                </div>
+                <div style="margin-top:10px;">
+                    <label style="display:inline-block; margin-right:10px;">🎯 正確答案：</label>
+                    <select class="q-ans" style="display:inline-block; width:auto; min-width:150px;">
+                        <option value="0" ${prefill && prefill.ans===0 ? 'selected':''}>🔴 選項一 (圓形)</option>
+                        <option value="1" ${prefill && prefill.ans===1 ? 'selected':''}>🔵 選項二 (菱形)</option>
+                        <option value="2" ${prefill && prefill.ans===2 ? 'selected':''}>🟡 選項三 (正方形)</option>
+                        <option value="3" ${prefill && prefill.ans===3 ? 'selected':''}>🟢 選項四 (三角形)</option>
+                    </select>
+                </div>
+            `;
+            listContainer.appendChild(block);
+            localQuestionsCount++;
+        }
+
+        // ===============================================
+        // [新增] AI 生成題組函式 (支援多格式)
+        // ===============================================
+        async function generateQuizByAI(btnElement) {
+            const fileInput = document.getElementById('ai-source-file');
+            const qCount = document.getElementById('ai-q-count').value;
+            const diff = document.getElementById('ai-q-difficulty').value;
+            const apiKey = document.getElementById('ai-api-key').value.trim();
+
+            if (!fileInput.files.length) return alert("請先上傳檔案！");
+            if (!apiKey) return alert("請輸入 OpenAI API Key！");
+
+            const file = fileInput.files[0];
+            const ext = file.name.split('.').pop().toLowerCase();
+            let extractedText = "";
+            const originalText = btnElement.innerText;
+            btnElement.innerText = "⏳ 讀取檔案中...";
+            btnElement.disabled = true;
+
+            try {
+                if (ext === 'txt') { extractedText = await file.text(); } 
+                else if (ext === 'pdf') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+                    for (let i = 1; i <= pdf.numPages && i <= 5; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        extractedText += textContent.items.map(item => item.str).join(' ');
+                    }
+                } 
+                else if (ext === 'docx') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
+                    extractedText = result.value;
+                } 
+                else if (ext === 'xlsx') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(arrayBuffer, {type: 'array'});
+                    extractedText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+                } 
+                else { throw new Error("不支援的檔案格式"); }
+
+                extractedText = extractedText.substring(0, 3000); 
+                btnElement.innerText = "🧠 AI 生成中(約10-20秒)...";
+                
+                const prompt = `請根據以下文本，生成 ${qCount} 題的 Kahoot 單選題，難度為 ${diff}。
+                必須嚴格回傳 JSON 陣列格式，不可包含其他說明文字，格式範例如下：
+                [
+                  {"q": "題目敘述", "opts": ["選項1", "選項2", "選項3", "選項4"], "ans": 0}
+                ]
+                選項必須剛好4個，ans 為正確答案的索引(0~3)。
+                文本內容：${extractedText}`;
+
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+                    body: JSON.stringify({ model: "gpt-3.5-turbo", messages: [{ role: "user", content: prompt }], temperature: 0.7 })
+                });
+
+                if (!response.ok) throw new Error("API 請求失敗，請檢查 Key 或網路");
+                const resJson = await response.json();
+                const rawText = resJson.choices[0].message.content;
+                
+                const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+                if (!jsonMatch) throw new Error("AI 回傳格式錯誤");
+                const newQuestions = JSON.parse(jsonMatch[0]);
+
+                createNewQuizSetUI();
+                document.getElementById('sub-questions-list').innerHTML = '';
+                localQuestionsCount = 0;
+                newQuestions.forEach(qData => addQuestionInnerBlock(qData));
+                alert(`🎉 成功生成 ${newQuestions.length} 題！請檢查調整後即可開始遊戲。`);
+
+            } catch (error) {
+                console.error(error); alert("生成失敗: " + error.message);
+            } finally {
+                btnElement.disabled = false; btnElement.innerText = originalText;
+            }
+        }
+
+        // ===============================================
+        // [新增] AI 生成錯誤選項函式
+        // ===============================================
+        async function generateDistractors(btnElement, blockIndex) {
+            const apiKey = document.getElementById('ai-api-key').value.trim() || prompt("請輸入您的 OpenAI API Key:");
+            if (!apiKey) return;
+            document.getElementById('ai-api-key').value = apiKey; 
+
+            const block = document.getElementById(`inner-q-block-${blockIndex}`);
+            const qTitle = block.querySelector('.q-title').value.trim();
+            const correctAnsIndex = parseInt(block.querySelector('.q-ans').value);
+            const optInputs = [
+                block.querySelector('.q-opt-0'), block.querySelector('.q-opt-1'),
+                block.querySelector('.q-opt-2'), block.querySelector('.q-opt-3')
+            ];
+            const correctText = optInputs[correctAnsIndex].value.trim();
+
+            if (!qTitle || !correctText) return alert("請先填寫「題目」與「正確答案」對應的格子！");
+
+            const originalText = btnElement.innerText;
+            btnElement.innerText = "⏳ 思考中...";
+            btnElement.disabled = true;
+
+            try {
+                const prompt = `我有一個選擇題：\n題目：「${qTitle}」\n正確答案：「${correctText}」\n請為我生成 3 個具誘惑力但不正確的錯誤選項。\n嚴格回傳 JSON 陣列格式，包含3個字串，不可有其他文字。例如：["錯誤一", "錯誤二", "錯誤三"]`;
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+                    body: JSON.stringify({ model: "gpt-3.5-turbo", messages: [{ role: "user", content: prompt }] })
+                });
+
+                if (!response.ok) throw new Error("API 請求失敗");
+                const resJson = await response.json();
+                const jsonMatch = resJson.choices[0].message.content.match(/\[[\s\S]*\]/);
+                const wrongOptions = JSON.parse(jsonMatch[0]);
+
+                let wrongIndex = 0;
+                optInputs.forEach((inp, idx) => {
+                    if (idx !== correctAnsIndex && wrongIndex < wrongOptions.length) {
+                        inp.value = wrongOptions[wrongIndex];
+                        wrongIndex++;
+                    }
+                });
+            } catch (error) { alert("生成失敗: " + error.message); } 
+            finally { btnElement.innerText = originalText; btnElement.disabled = false; }
+        }
+
+        // ===============================================
+        // 遊戲核心邏輯與連線機制 (補齊)
+        // ===============================================
+        function compileAllInputs() {
+            quizData = [];
+            const setDom = document.getElementById('current-quiz-set');
+            if(!setDom) return;
+            globalTimeLimit = parseInt(document.getElementById('set-global-time').value);
+            const blocks = setDom.querySelectorAll('.q-editor-block');
+            blocks.forEach(b => {
+                const title = b.querySelector('.q-title').value.trim();
+                const o0 = b.querySelector('.q-opt-0').value.trim();
+                const o1 = b.querySelector('.q-opt-1').value.trim();
+                const o2 = b.querySelector('.q-opt-2').value.trim();
+                const o3 = b.querySelector('.q-opt-3').value.trim();
+                const ans = parseInt(b.querySelector('.q-ans').value);
+                if(title && o0 && o1 && o2 && o3) quizData.push({ q: title, opts: [o0, o1, o2, o3], ans: ans, timeLimit: globalTimeLimit });
+            });
+        }
+
+        let currentIdx = 0, role = '', peer = null, roomPin = '', connMap = new Map();
+        let playerData = {}, roundAnswers = {}, timerInterval = null, timeLeft = 20;
+        let questionStartTime = 0, isAcceptingAnswers = false, myConn = null, myNickname = '';
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            const pPanel = document.getElementById('global-persistent-panel');
+            if (role === 'host' && screenId !== 'screen-host-lobby') pPanel.classList.add('visible');
+            else pPanel.classList.remove('visible');
+        }
+
+        function initHost() {
+            compileAllInputs();
+            if(quizData.length === 0) return alert('請確認至少填寫了一組完整題目！');
+            role = 'host';
             switchScreen('screen-host-lobby');
-        });
+            roomPin = Math.floor(1000 + Math.random() * 9000).toString();
+            document.getElementById('room-pin-text').innerText = roomPin;
+            document.getElementById('persist-pin-text').innerText = roomPin;
 
-        peer.on('connection', conn => {
-            conn.on('data', data => handleHostReceivedData(conn, data));
-        });
-    }
+            peer = new Peer('kahoot-room-' + roomPin);
+            peer.on('open', () => {
+                const joinUrl = `${window.location.origin}${window.location.pathname}?room=${roomPin}`;
+                document.getElementById('qrcode').innerHTML = "";
+                new QRCode(document.getElementById('qrcode'), { text: joinUrl, width: 160, height: 160 });
+                document.getElementById('persist-qrcode').innerHTML = "";
+                new QRCode(document.getElementById('persist-qrcode'), { text: joinUrl, width: 85, height: 85 });
+            });
+            peer.on('connection', (conn) => {
+                conn.on('data', (data) => handleHostReceivedData(conn, data));
+                conn.on('close', () => removePlayerFromState(conn.peer));
+            });
+        }
 
-    function handleHostReceivedData(conn, data) {
-        if(data.type === 'JOIN') {
-            playerData[conn.peer] = { name: data.name, score: 0, streak: 0 };
-            connMap.set(conn.peer, conn);
-            updateLobbyUI();
-            conn.send({ type: 'JOIN_ACK', success: true });
-        } else if (data.type === 'SUBMIT_ANSWER' && isAcceptingAnswers && !roundAnswers[conn.peer]) {
-            let timeTaken = (Date.now() - questionStartTime) / 1000;
+        function handleHostReceivedData(conn, data) {
+            if (data.type === 'JOIN') {
+                playerData[conn.peer] = { name: data.name, score: 0 };
+                connMap.set(conn.peer, conn);
+                updatePlayerListsUI();
+                conn.send({ type: 'JOIN_ACK', success: true });
+            }
+            if (data.type === 'SUBMIT_ANSWER' && isAcceptingAnswers && !roundAnswers[conn.peer]) {
+                roundAnswers[conn.peer] = { optIndex: data.optIdx, timeTaken: (Date.now() - questionStartTime)/1000 };
+                document.getElementById('answer-counter').innerText = `已答題人數: ${Object.keys(roundAnswers).length}`;
+                conn.send({ type: 'ANSWER_ACK' });
+                if (Object.keys(roundAnswers).length >= connMap.size) revealAnswer();
+            }
+        }
+
+        function removePlayerFromState(peerId) { connMap.delete(peerId); updatePlayerListsUI(); }
+        function updatePlayerListsUI() {
+            document.getElementById('player-count').innerText = connMap.size;
+            document.getElementById('persist-count').innerText = connMap.size;
+            let html = '', phtml = '';
+            connMap.forEach((conn, id) => {
+                html += `<div class="player-badge">${playerData[id].name} <button class="btn-kick" onclick="kickPlayer('${id}')">✕</button></div>`;
+                phtml += `<div class="p-list-item">${playerData[id].name}</div>`;
+            });
+            document.getElementById('lobby-players').innerHTML = html;
+            document.getElementById('persist-players-dom').innerHTML = phtml;
+            document.getElementById('btn-start-game').style.display = connMap.size > 0 ? 'inline-block' : 'none';
+        }
+
+        function kickPlayer(peerId) {
+            const conn = connMap.get(peerId);
+            if(conn) { conn.send({type:'KICKED'}); setTimeout(()=> { conn.close(); removePlayerFromState(peerId); }, 100); }
+        }
+
+        function startQuiz() { currentIdx = 0; showQuestion(); }
+
+        function showQuestion() {
+            isAcceptingAnswers = true;
+            roundAnswers = {};
             let qItem = quizData[currentIdx];
-            let isCorrect = (data.ansIdx === qItem.ans);
-            let scoreGained = 0;
             
-            if(isCorrect) {
-                playerData[conn.peer].streak++;
-                let timeBonus = Math.max(0, 1 - (timeTaken / globalTimeLimit)) * 500;
-                scoreGained = 500 + Math.round(timeBonus);
-                if (playerData[conn.peer].streak >= 2) scoreGained += 100 * Math.min(playerData[conn.peer].streak, 5);
-                playerData[conn.peer].score += scoreGained;
-            } else {
-                playerData[conn.peer].streak = 0;
+            // ===============================================
+            // [新增] 開始時自動打亂選項順序
+            // ===============================================
+            let originalCorrectText = qItem.opts[qItem.ans];
+            for (let i = qItem.opts.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [qItem.opts[i], qItem.opts[j]] = [qItem.opts[j], qItem.opts[i]];
             }
-            roundAnswers[conn.peer] = { isCorrect, scoreGained };
-        }
-    }
-
-    function updateLobbyUI() {
-        const dom = document.getElementById('lobby-players');
-        dom.innerHTML = '';
-        let count = 0;
-        connMap.forEach((conn, id) => {
-            if(playerData[id]) {
-                dom.innerHTML += `<div class="player-badge">${playerData[id].name}</div>`;
-                count++;
-            }
-        });
-        document.getElementById('player-count').innerText = count;
-        document.getElementById('btn-start-game').style.display = count > 0 ? 'inline-block' : 'none';
-    }
-
-    function startQuiz() {
-        currentIdx = 0;
-        showQuestion();
-    }
-
-    function showQuestion() {
-        isAcceptingAnswers = true;
-        roundAnswers = {};
-        let qItem = quizData[currentIdx];
-        
-        // ==========================================
-        // [新增] 開始時自動打亂選項順序 (Fisher-Yates)
-        // ==========================================
-        let originalCorrectText = qItem.opts[qItem.ans];
-        for (let i = qItem.opts.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [qItem.opts[i], qItem.opts[j]] = [qItem.opts[j], qItem.opts[i]];
-        }
-        // 更新正確答案的新索引
-        qItem.ans = qItem.opts.indexOf(originalCorrectText);
-        // ==========================================
-
-        document.getElementById('quiz-progress').innerText = `題目 ${currentIdx + 1} / ${quizData.length}`;
-        document.getElementById('host-q-title').innerText = qItem.q;
-        
-        let shapes = ['shape-0', 'shape-1', 'shape-2', 'shape-3'];
-        let optionsHtml = '';
-        qItem.opts.forEach((opt, idx) => {
-            optionsHtml += `<div class="option-card opt-${idx}"><span class="option-shape ${shapes[idx]}"></span>${opt}</div>`;
-        });
-        document.getElementById('host-options').innerHTML = optionsHtml;
-        document.getElementById('btn-next-q').style.display = 'none';
-        
-        switchScreen('screen-host-quiz');
-        
-        connMap.forEach(conn => conn.send({ type: 'START_QUESTION' }));
-        
-        timeLeft = globalTimeLimit;
-        document.getElementById('host-timer').innerText = timeLeft;
-        questionStartTime = Date.now();
-        
-        clearInterval(timerInterval);
-        timerInterval = setInterval(() => {
-            timeLeft--;
+            qItem.ans = qItem.opts.indexOf(originalCorrectText); // 重新校準正確答案位置
+            
+            document.getElementById('host-quiz-progress').innerText = `題目 ${currentIdx + 1} / ${quizData.length}`;
+            document.getElementById('host-question').innerText = qItem.q;
+            
+            let shapes = ['shape-0', 'shape-1', 'shape-2', 'shape-3'];
+            let optsHtml = '';
+            qItem.opts.forEach((opt, i) => {
+                optsHtml += `<div class="option-card opt-${i}"><span class="option-shape ${shapes[i]}"></span>${opt}</div>`;
+            });
+            document.getElementById('host-options').innerHTML = optsHtml;
+            document.getElementById('answer-counter').innerText = `已答題人數: 0`;
+            document.getElementById('btn-reveal').style.display = 'inline-block';
+            
+            switchScreen('screen-host-quiz');
+            connMap.forEach(conn => conn.send({ type: 'START_QUESTION' }));
+            
+            timeLeft = globalTimeLimit;
             document.getElementById('host-timer').innerText = timeLeft;
-            if (timeLeft <= 0) {
-                clearInterval(timerInterval);
-                revealAnswer();
-            }
-        }, 1000);
-    }
-
-    function revealAnswer() {
-        isAcceptingAnswers = false;
-        let qItem = quizData[currentIdx];
-        
-        let cards = document.getElementById('host-options').children;
-        for(let i = 0; i < cards.length; i++) {
-            if(i === qItem.ans) cards[i].classList.add('correct-highlight');
-            else cards[i].classList.add('fade-out');
+            questionStartTime = Date.now();
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('host-timer').innerText = timeLeft;
+                if (timeLeft <= 0) revealAnswer();
+            }, 1000);
         }
-        
-        connMap.forEach((conn, id) => {
-            let res = roundAnswers[id] || { isCorrect: false, scoreGained: 0 };
-            conn.send({ type: 'RESULT', isCorrect: res.isCorrect, scoreGained: res.scoreGained, totalScore: playerData[id].score });
-        });
-        
-        document.getElementById('btn-next-q').style.display = 'inline-block';
-    }
 
-    function nextQuestion() {
-        if(document.getElementById('screen-host-quiz').classList.contains('active')) {
-            showLeaderboard();
-        } else {
+        function revealAnswer() {
+            clearInterval(timerInterval);
+            isAcceptingAnswers = false;
+            let qItem = quizData[currentIdx];
+            document.getElementById('btn-reveal').style.display = 'none';
+            
+            let cards = document.getElementById('host-options').children;
+            for(let i=0; i<cards.length; i++) {
+                if(i === qItem.ans) cards[i].classList.add('correct-highlight');
+                else cards[i].classList.add('fade-out');
+            }
+
+            connMap.forEach((conn, id) => {
+                let ans = roundAnswers[id];
+                let isCorrect = ans && (ans.optIndex === qItem.ans);
+                let score = 0;
+                if(isCorrect) {
+                    score = 500 + Math.round((1 - (ans.timeTaken / globalTimeLimit)) * 500);
+                    playerData[id].score += score;
+                }
+                conn.send({ type: 'RESULT', isCorrect, scoreGained: score });
+            });
+            setTimeout(showLeaderboard, 3000);
+        }
+
+        function showLeaderboard() {
+            switchScreen('screen-host-rank');
+            let sorted = Object.values(playerData).sort((a,b) => b.score - a.score);
+            let html = '';
+            sorted.forEach((p, i) => {
+                html += `<div class="leaderboard-item"><span>#${i+1} ${p.name}</span><span>${p.score} pts</span></div>`;
+            });
+            document.getElementById('leaderboard-dom').innerHTML = html;
+            document.getElementById('btn-next').innerText = currentIdx < quizData.length - 1 ? '下一題 ❯' : '結束遊戲 🏁';
+        }
+
+        function nextQuestion() {
             currentIdx++;
-            if (currentIdx < quizData.length) {
-                showQuestion();
-            } else {
-                alert("遊戲結束！");
-                connMap.forEach(conn => conn.send({ type: 'FINAL_結算' }));
-                location.reload();
+            if(currentIdx < quizData.length) showQuestion();
+            else {
+                connMap.forEach(conn => conn.send({type: 'FINAL_結算'}));
+                alert("遊戲結束！"); location.reload();
             }
         }
-    }
 
-    function showLeaderboard() {
-        switchScreen('screen-host-leaderboard');
-        let sorted = Object.values(playerData).sort((a, b) => b.score - a.score);
-        let html = '';
-        sorted.forEach((p, i) => {
-            html += `<div style="background:white; padding:15px; margin-bottom:10px; border-radius:8px; font-size:24px; font-weight:bold;">#${i+1} ${p.name} - ${p.score} pts</div>`;
-        });
-        document.getElementById('leaderboard-dom').innerHTML = html;
-        document.getElementById('btn-leaderboard-next').innerText = (currentIdx < quizData.length - 1) ? '下一題' : '結束遊戲';
-    }
-
-    // === 玩家端流程 ===
-    let myConn = null;
-    function connectToHost() {
-        let pin = document.getElementById('pad-pin-input').value.trim();
-        myNickname = document.getElementById('pad-name-input').value.trim();
-        if(!pin || !myNickname) return alert('請輸入完整資訊');
-        
-        peer = new Peer();
-        peer.on('open', () => {
-            myConn = peer.connect(pin);
-            myConn.on('open', () => {
-                myConn.send({ type: 'JOIN', name: myNickname });
-            });
-            myConn.on('data', data => {
-                if(data.type === 'JOIN_ACK') switchScreen('screen-pad-wait');
-                if(data.type === 'START_QUESTION') {
-                    document.getElementById('pad-q-title').innerText = '請看大螢幕作答';
-                    switchScreen('screen-pad-play');
-                }
-                if(data.type === 'RESULT') {
-                    document.getElementById('pad-wait-msg').innerText = data.isCorrect ? `✅ 答對了！\n+${data.scoreGained} 總分:${data.totalScore}` : `❌ 答錯了！\n總分:${data.totalScore}`;
-                    switchScreen('screen-pad-wait');
-                }
-                if(data.type === 'FINAL_結算') {
-                    document.getElementById('pad-wait-msg').innerText = '遊戲結束！請看大螢幕排行榜';
-                }
-            });
-        });
-    }
-
-    function submitAnswer(idx) {
-        if(!myConn) return;
-        myConn.send({ type: 'SUBMIT_ANSWER', ansIdx: idx });
-        document.getElementById('pad-q-title').innerText = '已送出等待結果...';
-    }
-
-    // ==========================================
-    // [新增] 1. AI 支援全格式檔案解析並生成題組
-    // ==========================================
-    async function generateQuizByAI(btnElement) {
-        const fileInput = document.getElementById('ai-source-file');
-        const qCount = document.getElementById('ai-q-count').value;
-        const diff = document.getElementById('ai-q-difficulty').value;
-        const apiKey = document.getElementById('ai-api-key').value.trim();
-
-        if (!fileInput.files.length) return alert("請先上傳檔案！");
-        if (!apiKey) return alert("請輸入 OpenAI API Key！");
-
-        const file = fileInput.files[0];
-        const ext = file.name.split('.').pop().toLowerCase();
-        let extractedText = "";
-
-        const originalText = btnElement.innerText;
-        btnElement.innerText = "⏳ 讀取檔案中...";
-        btnElement.disabled = true;
-
-        try {
-            if (ext === 'txt') {
-                extractedText = await file.text();
-            } else if (ext === 'pdf') {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-                for (let i = 1; i <= pdf.numPages && i <= 5; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    extractedText += textContent.items.map(item => item.str).join(' ');
-                }
-            } else if (ext === 'docx') {
-                const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
-                extractedText = result.value;
-            } else if (ext === 'xlsx') {
-                const arrayBuffer = await file.arrayBuffer();
-                const workbook = XLSX.read(arrayBuffer, {type: 'array'});
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                extractedText = XLSX.utils.sheet_to_csv(firstSheet);
-            } else {
-                throw new Error("不支援的檔案格式");
-            }
-
-            extractedText = extractedText.substring(0, 3000); 
-
-            btnElement.innerText = "🧠 AI 生成中(約10-20秒)...";
+        // ================= 玩家端邏輯 =================
+        function connectToHost() {
+            let pin = document.getElementById('pad-pin-input').value.trim();
+            myNickname = document.getElementById('pad-name-input').value.trim();
+            if(!pin || !myNickname) return alert('請填寫完整');
             
-            const prompt = `請根據以下文本，生成 ${qCount} 題的 Kahoot 單選題，難度為 ${diff}。
-            必須嚴格回傳 JSON 陣列格式，不可包含其他說明文字，格式範例如下：
-            [
-              {"q": "題目敘述", "opts": ["選項1", "選項2", "選項3", "選項4"], "ans": 0}
-            ]
-            選項必須剛好4個，ans 為正確答案的索引(0~3)。
-            文本內容：${extractedText}`;
-
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    model: "gpt-3.5-turbo",
-                    messages: [{ role: "user", content: prompt }],
-                    temperature: 0.7
-                })
+            peer = new Peer();
+            peer.on('open', () => {
+                myConn = peer.connect('kahoot-room-' + pin);
+                myConn.on('open', () => { myConn.send({ type: 'JOIN', name: myNickname }); });
+                myConn.on('data', data => {
+                    if(data.type === 'JOIN_ACK') {
+                        document.getElementById('display-player-name').innerText = myNickname;
+                        document.getElementById('player-nickname-badge').style.display = 'block';
+                        switchScreen('screen-pad-wait');
+                    }
+                    if(data.type === 'START_QUESTION') switchScreen('screen-pad-game');
+                    if(data.type === 'ANSWER_ACK') {
+                        switchScreen('screen-pad-wait');
+                        document.getElementById('pad-wait-msg').innerText = '已送出，等待其他玩家...';
+                    }
+                    if(data.type === 'RESULT') {
+                        switchScreen('screen-pad-result');
+                        document.getElementById('pad-result-title').innerText = data.isCorrect ? '✅ 答對了！' : '❌ 答錯了！';
+                        document.getElementById('pad-result-score').innerText = `+${data.scoreGained} 分`;
+                    }
+                    if(data.type === 'FINAL_結算') switchScreen('screen-pad-final');
+                    if(data.type === 'KICKED') { alert('您被移出房間'); location.reload(); }
+                });
             });
-
-            if (!response.ok) throw new Error("API 請求失敗，請檢查 Key 是否正確或額度不足。");
-            
-            const resJson = await response.json();
-            const rawText = resJson.choices[0].message.content;
-            
-            const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-            if (!jsonMatch) throw new Error("AI 回傳格式錯誤");
-            const newQuestions = JSON.parse(jsonMatch[0]);
-
-            // 自動填入編輯器
-            switchScreen('screen-editor');
-            document.getElementById('ai-generate-panel').style.display = 'none';
-            
-            newQuestions.forEach(qData => {
-                addQuestionInnerBlock(qData);
-            });
-            alert(`🎉 成功生成 ${newQuestions.length} 題！請在編輯器中檢查並調整。`);
-
-        } catch (error) {
-            console.error(error);
-            alert("生成失敗: " + error.message);
-        } finally {
-            btnElement.disabled = false;
-            btnElement.innerText = originalText;
-        }
-    }
-
-    // ==========================================
-    // [新增] 2. 編輯時讓 AI 生成另外三個錯誤選項
-    // ==========================================
-    async function generateDistractors(btnElement, blockIndex) {
-        const apiKey = document.getElementById('ai-api-key').value.trim() || prompt("請輸入您的 OpenAI API Key:");
-        if (!apiKey) return;
-        document.getElementById('ai-api-key').value = apiKey; // 暫存
-
-        const block = document.getElementById(`inner-q-block-${blockIndex}`);
-        const qTitle = block.querySelector('.q-title').value.trim();
-        const correctAnsIndex = parseInt(block.querySelector('.q-ans').value);
-        const optInputs = block.querySelectorAll('.q-opt');
-        const correctText = optInputs[correctAnsIndex].value.trim();
-
-        if (!qTitle || !correctText) {
-            return alert("請先填寫「題目」與「正確答案」對應的格子，才能讓 AI 生成其他錯誤選項！");
         }
 
-        const originalText = btnElement.innerText;
-        btnElement.innerText = "⏳ 思考中...";
-        btnElement.disabled = true;
-
-        try {
-            const prompt = `我有一個選擇題：
-            題目：「${qTitle}」
-            正確答案：「${correctText}」
-            請為我生成 3 個具誘惑力但不正確的錯誤選項。
-            嚴格回傳 JSON 陣列格式，包含3個字串，不可有其他文字。例如：["錯誤一", "錯誤二", "錯誤三"]`;
-
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-                body: JSON.stringify({
-                    model: "gpt-3.5-turbo",
-                    messages: [{ role: "user", content: prompt }],
-                    temperature: 0.7
-                })
-            });
-
-            if (!response.ok) throw new Error("API 請求失敗");
-            const resJson = await response.json();
-            const rawText = resJson.choices[0].message.content;
-            
-            const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-            if (!jsonMatch) throw new Error("回傳格式錯誤");
-            const wrongOptions = JSON.parse(jsonMatch[0]);
-
-            let wrongIndex = 0;
-            optInputs.forEach((inp, idx) => {
-                if (idx !== correctAnsIndex && wrongIndex < wrongOptions.length) {
-                    inp.value = wrongOptions[wrongIndex];
-                    wrongIndex++;
-                }
-            });
-
-        } catch (error) {
-            alert("生成失敗: " + error.message);
-        } finally {
-            btnElement.innerText = originalText;
-            btnElement.disabled = false;
+        function submitAnswer(idx) {
+            if(myConn) myConn.send({ type: 'SUBMIT_ANSWER', optIdx: idx });
         }
-    }
-</script>
+    </script>
 </body>
 </html>
