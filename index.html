@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kahoot!!</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --red: #e21b3c; --blue: #1368ce; --yellow: #d89e00; --green: #26890c;
+            --purple: #46178f; --dark: #1a1a1a; --white: #ffffff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f2f2f2; color: var(--dark); overflow-x: hidden; }
+        
+        .screen { display: none; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; position: relative; }
+        .screen.active { display: flex; }
+        
+        .btn-main { background-color: var(--purple); color: white; border: none; padding: 12px 35px; font-size: 20px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-top: 15px; }
+        .btn-main:hover { transform: scale(1.03); background-color: #361071; }
+        .btn-main:disabled { background-color: #aaa; cursor: not-allowed; transform: none; }
+        
+        /* 題組與編輯器樣式 */
+        .quiz-set-container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 700px; text-align: left; margin-bottom: 25px; max-height: 65vh; overflow-y: auto; color: var(--dark); position: relative; }
+        .q-editor-block { border-left: 4px solid var(--purple); padding-left: 15px; margin: 20px 0; background: #fafafa; padding: 15px; border-radius: 0 8px 8px 0; }
+        .q-editor-block h4 { color: var(--purple); margin-bottom: 10px; }
+        
+        .quiz-set-container label { display: block; font-weight: bold; margin-top: 10px; color: #444; }
+        .quiz-set-container input, .quiz-set-container select { width: 100%; padding: 10px; margin: 6px 0 12px 0; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; display: block; }
+        
+        .opt-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        
+        #qrcode { background: white; padding: 20px; border-radius: 12px; margin: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .pin-display { font-size: 48px; font-weight: bold; color: var(--purple); margin: 10px 0; letter-spacing: 2px; }
+        
+        .player-list { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; max-width: 800px; margin-top: 30px; }
+        .player-badge { background: white; padding: 8px 18px; border-radius: 30px; font-size: 20px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border: 2px solid var(--purple); display: flex; align-items: center; gap: 10px; animation: pop 0.3s ease; }
+        
+        /* 離線玩家徽章樣式 */
+        .player-badge.offline { opacity: 0.55; background: #e0e0e0; border-color: #999; color: #555; }
+        
+        .btn-kick { background: rgba(226, 27, 60, 0.1); color: var(--red); border: none; border-radius: 50%; width: 26px; height: 26px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-weight: bold; }
+        .btn-kick:hover { background: var(--red); color: white; }
+
+        /* 右上角常駐連線與線上玩家資訊面板 */
+        .persistent-lobby-info {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            border: 2px solid var(--purple);
+            display: none; flex-direction: column; align-items: center; z-index: 999; width: 220px;
+        }
+        .persistent-lobby-info.visible { display: flex; }
+        .persistent-pin { font-size: 16px; font-weight: bold; color: var(--purple); margin-bottom: 5px; }
+        .persistent-qr { background: white; padding: 4px; border-radius: 4px; margin-bottom: 8px; }
+        .persistent-players-header { font-size: 13px; font-weight: bold; color: #555; width: 100%; text-align: left; border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 4px; }
+        .persistent-players-list { width: 100%; max-height: 150px; overflow-y: auto; margin-top: 5px; text-align: left; }
+        .p-list-item { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+        .p-list-item.offline { opacity: 0.55; color: #777; }
+
+        /* 題目大螢幕畫面 */
+        .quiz-progress-text { font-size: 22px; font-weight: bold; color: var(--purple); background: rgba(70, 23, 143, 0.1); padding: 6px 20px; border-radius: 20px; margin-bottom: 5px; }
+        .timer-circle { width: 85px; height: 85px; border-radius: 50%; background: var(--purple); color: white; font-size: 32px; font-weight: bold; display: flex; align-items: center; justify-content: center; margin: 15px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .question-text { font-size: 36px; font-weight: bold; margin-bottom: 30px; padding: 0 20px; text-align: center; width: 100%; max-width: 1100px; } 
+        .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; width: 100%; max-width: 1100px; padding: 10px; margin: 0 auto; }
+        .option-card { padding: 25px; font-size: 24px; font-weight: bold; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.2s; text-align: center; }
+        .option-card.fade-out { opacity: 0.25; transform: scale(0.95); }
+        .option-card.correct-highlight { border: 5px solid #fff; box-shadow: 0 0 20px rgba(0,0,0,0.4); z-index: 10; }
+        
+        .opt-0 { background-color: var(--red); } .opt-1 { background-color: var(--blue); }
+        .opt-2 { background-color: var(--yellow); } .opt-3 { background-color: var(--green); }
+        
+        /* 幾何圖形實心樣式 */
+        .option-shape { width: 30px; height: 30px; display: inline-block; background-color: white; flex-shrink: 0; }
+        .shape-0 { border-radius: 50%; } 
+        .shape-1 { transform: rotate(45deg); width: 24px; height: 24px; margin: 0 3px; } 
+        .shape-2 { border-radius: 3px; } 
+        .shape-3 { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); width: 34px; height: 30px; background-color: white; }
+        
+        .chart-container { width: 100%; max-width: 650px; height: 320px; margin: 15px auto; }
+        .leaderboard-list { width: 100%; max-width: 600px; margin: 20px 0; }
+        .leaderboard-item { display: flex; justify-content: space-between; background: white; padding: 15px 25px; margin-bottom: 10px; border-radius: 6px; font-size: 22px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        /* 排行榜離線玩家置底淡化 */
+        .leaderboard-item.offline-player { opacity: 0.45; background: #e8e8e8; color: #777; box-shadow: none; border: 1px dashed #ccc; }
+
+        /* 手機玩家端樣式 */
+        .pad-screen { padding: 10px; background: #f5f5f5; justify-content: flex-start; }
+        .pad-quiz-header { width: 100%; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 10px; text-align: center; border-bottom: 4px solid var(--purple); margin-top: 35px; } 
+        .pad-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; height: calc(100vh - 160px); }
+        .pad-btn { border: none; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; color: white; font-size: 18px; font-weight: bold; }
+        .pad-btn:active { opacity: 0.7; }
+        .pad-opt-text { margin-top: 10px; word-break: break-word; text-align: center; font-size: 16px;}
+        
+        .status-msg { font-size: 24px; font-weight: bold; color: #555; white-space: pre-line; line-height: 1.4; }
+        .input-group { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 90%; max-width: 400px; }
+        .input-group input { width: 100%; padding: 12px; font-size: 18px; margin: 15px 0; border: 2px solid #ccc; border-radius: 6px; text-align: center; }
+        
+        /* 玩家個人暱稱固定顯示標籤 */
+        #player-nickname-badge {
+            display: none; position: fixed; top: 10px; left: 10px; 
+            background: rgba(0,0,0,0.6); color: white; 
+            padding: 6px 14px; border-radius: 20px; 
+            font-size: 14px; font-weight: bold; z-index: 9999;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        @keyframes pop { 0% { transform: scale(0.7); } 100% { transform: scale(1); } }
+        @media(max-width: 768px) { 
+            .options-grid { grid-template-columns: 1fr; } 
+            .option-card { font-size: 18px; padding: 15px; } 
+            .opt-row { grid-template-columns: 1fr; }
+            .persistent-lobby-info { position: static; margin-bottom: 15px; width: 100%; max-width: 400px; } 
+        }
+    </style>
+</head>
+<body>
+
+    <div id="player-nickname-badge">👤 <span id="display-player-name"></span></div>
+
+    <div id="global-persistent-panel" class="persistent-lobby-info">
+        <div class="persistent-pin">房間 ID: <span id="persist-pin-text">----</span></div>
+        <div id="persist-qrcode" class="persistent-qr"></div>
+        <div class="persistent-players-header">線上玩家 (<span id="persist-count">0</span>)：</div>
+        <div class="persistent-players-list" id="persist-players-dom"></div>
+    </div>
+
+    <div id="screen-welcome" class="screen active" style="background: linear-gradient(135deg, #46178f 0%, #250854 100%); color: white; justify-content: flex-start; overflow-y: auto; padding-top: 40px;">
+        <h1>Kahoot!! FAKE</h1>
+        <p style="margin: 10px 0 20px 0; opacity: 0.8;">您可以新增題組、或是直接匯入現有的題組 TXT 檔案！</p>
+        
+        <div id="quiz-workspace" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+            </div>
+
+        <input type="file" id="file-import-input" accept=".txt" style="display: none;" onchange="handleFileImport(event)">
+
+        <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center;" id="welcome-action-buttons">
+            <button id="btn-add-set" class="btn-main" style="background:#00c853;" onclick="createNewQuizSetUI()">＋ 新增題組</button>
+            <button id="btn-import-set" class="btn-main" style="background:#00e5ff; color:#1a1a1a;" onclick="document.getElementById('file-import-input').click()">📂 匯入題組文字檔 (.txt)</button>
+            <button id="btn-download-template" class="btn-main" style="background:#8e44ad;" onclick="downloadTemplate()">📄 下載題組模板</button>
+            
+            <button id="btn-editor-back" class="btn-main" style="background:#666; display:none;" onclick="location.reload()">✕ 關閉返回</button>
+            <button id="btn-export-set" class="btn-main" style="background:#ff9100; display:none;" onclick="exportQuizSetToFile()">💾 匯出並下載題組 (.txt)</button>
+            <button id="btn-host-start" class="btn-main" style="display:none;" onclick="initHost()">開啟大螢幕主台 (Host)</button>
+        </div>
+        <hr style="width:100%; max-width:700px; opacity:0.2; margin:10px 0;" id="welcome-divider">
+        <button id="btn-manual-join" class="btn-main" style="background:#0085ff; margin-top:10px;" onclick="switchScreen('screen-pad-login')">玩家 (Player) 加入遊戲</button>
+    </div>
+
+    <div id="screen-host-lobby" class="screen">
+        <h2>📢 玩家加入中...</h2>
+        <div id="qrcode"></div>
+        <div class="pin-display">房間 ID: <span id="room-pin-text">---</span></div>
+        <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">目前狀態名單 (在線: <span id="player-count">0</span>):</div>
+        <div class="player-list" id="lobby-players"></div>
+        <button id="btn-start-game" class="btn-main" style="display:none;" onclick="startQuiz()">開始遊戲</button>
+    </div>
+
+    <div id="screen-host-quiz" class="screen">
+        <div class="quiz-progress-text" id="host-quiz-progress">題目 0 / 0</div>
+        <div class="timer-circle" id="host-timer">20</div>
+        <div class="question-text" id="host-question">題目載入中...</div>
+        
+        <div class="chart-container" id="chart-panel" style="display: none;">
+            <canvas id="resultChart"></canvas>
+        </div>
+
+        <div class="options-grid" id="host-options"></div>
+        <div style="margin-top:25px; font-size:18px; font-weight: bold; display: flex; gap:20px; align-items:center;" id="host-footer-btn-zone">
+            <span id="answer-counter" style="color:#666;">已答題人數: 0</span>
+        </div>
+    </div>
+
+    <div id="screen-host-rank" class="screen">
+        <h2 id="rank-title">目前積分榜</h2>
+        <div class="leaderboard-list" id="leaderboard-dom"></div>
+        <button class="btn-main" id="btn-next" onclick="nextQuestion()">下一題 ❯</button>
+    </div>
+
+    <div id="screen-pad-login" class="screen" style="background: var(--purple);">
+        <div class="input-group">
+            <h3 style="color:var(--purple); text-align:center;">加入 Kahoot 遊戲</h3>
+            <input type="text" id="pad-pin-input" placeholder="請輸入房間 ID">
+            <input type="text" id="pad-name-input" placeholder="請輸入您的暱稱" maxlength="10">
+            <button class="btn-main" style="width:100%; margin-top:5px;" onclick="connectToHost()">進入遊戲</button>
+            <button class="btn-main" style="width:100%; margin-top:10px; background:#666; font-size:14px; padding:5px;" onclick="location.reload()">返回首頁</button>
+        </div>
+    </div>
+
+    <div id="screen-pad-wait" class="screen" style="background: var(--blue); color:white;">
+        <div class="status-msg" style="color:white;" id="pad-wait-msg">成功加入！請看大螢幕等待開賽...</div>
+    </div>
+
+    <div id="screen-pad-game" class="screen pad-screen">
+        <div class="pad-quiz-header">
+            <div id="pad-header-index" style="font-size:14px; font-weight:bold; color:var(--purple);">題目 - / -</div>
+            <div id="pad-header-title" style="font-size:18px; font-weight:bold; color:#1a1a1a; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">題目名稱載入中...</div>
+        </div>
+        <div class="pad-grid">
+            <button class="pad-btn opt-0">
+                <span class="option-shape shape-0"></span><span class="pad-opt-text"></span>
+            </button>
+            <button class="pad-btn opt-1">
+                <span class="option-shape shape-1"></span><span class="pad-opt-text"></span>
+            </button>
+            <button class="pad-btn opt-2">
+                <span class="option-shape shape-2"></span><span class="pad-opt-text"></span>
+            </button>
+            <button class="pad-btn opt-3">
+                <span class="option-shape shape-3"></span><span class="pad-opt-text"></span>
+            </button>
+        </div>
+    </div>
+
+    <div id="screen-pad-result" class="screen" style="color:white;">
+        <h1 id="pad-result-title" style="font-size: 32px;">已送出答案</h1>
+        
+        <div id="pad-result-streak" style="font-size: 36px; font-weight: bold; color: #ffeb3b; margin-top: 15px; text-shadow: 0 4px 10px rgba(0,0,0,0.3); display: none; animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+            🔥 連續答對 - 題！ 🔥
+        </div>
+
+        <p style="font-size:22px; margin-top:20px; white-space: pre-line; background: rgba(0,0,0,0.2); padding: 15px 30px; border-radius: 12px;" id="pad-result-score">+0 分</p>
+    </div>
+
+    <div id="screen-pad-final" class="screen" style="background: linear-gradient(135deg, #110326 0%, #46178f 100%); color:white;">
+        <h1 style="font-size: 36px; margin-bottom: 10px;">🏁 遊戲結束！</h1>
+        <div id="pad-final-rank" style="font-size: 28px; font-weight: bold; margin: 20px 0; color: #ffeb3b;">第 -- 名</div>
+        <div id="pad-final-score" style="font-size: 24px; background: rgba(255,255,255,0.1); padding: 15px 40px; border-radius: 50px; font-weight: bold;">總積分: 0 pts</div>
+        <button class="btn-main" style="background:#666; margin-top:40px; font-size:16px;" onclick="location.reload()">返回首頁</button>
+    </div>
+
+    <script>
+        let globalTimeLimit = 20; 
+        let quizData = [];
+        let localQuestionsCount = 0;
+
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const rId = urlParams.get('room');
+            if (rId) {
+                switchScreen('screen-pad-login');
+                document.getElementById('pad-pin-input').value = rId;
+            }
+        };
+
+        function createNewQuizSetUI() {
+            document.getElementById('quiz-workspace').innerHTML = `
+                <div class="quiz-set-container" id="current-quiz-set">
+                    <h3 style="color:var(--purple); border-bottom:2px solid #eee; padding-bottom:10px; width:100%;">📋 專屬自訂題組</h3>
+                    <label>⏱️ 整個題組答題時間統一設定：</label>
+                    <select id="set-global-time">
+                        <option value="10">10 秒</option>
+                        <option value="20" selected>20 秒</option>
+                        <option value="30">30 秒</option>
+                        <option value="60">60 秒</option>
+                        <option value="0">🛑 手動結束（不限時）</option>
+                    </select>
+                    <div id="sub-questions-list"></div>
+                    <button class="btn-main" style="background:#0085ff; font-size:16px; padding:8px 20px; width:100%;" onclick="addQuestionInnerBlock()">＋ 在此題組內新增題目</button>
+                </div>
+            `;
+            localQuestionsCount = 0;
+            addQuestionInnerBlock(); 
+            
+            document.getElementById('btn-add-set').style.display = 'none';
+            document.getElementById('btn-import-set').style.display = 'none';
+            document.getElementById('btn-download-template').style.display = 'none';
+            document.getElementById('btn-manual-join').style.display = 'none';
+            document.getElementById('welcome-divider').style.display = 'none';
+            
+            document.getElementById('btn-editor-back').style.display = 'inline-block';
+            document.getElementById('btn-export-set').style.display = 'inline-block';
+            document.getElementById('btn-host-start').style.display = 'inline-block';
+        }
+
+        function addQuestionInnerBlock(prefill = null) {
+            const listContainer = document.getElementById('sub-questions-list');
+            const bIdx = localQuestionsCount;
+            const block = document.createElement('div');
+            block.className = 'q-editor-block';
+            block.id = `inner-q-block-${bIdx}`;
+            
+            block.innerHTML = `
+                <h4>題目 #${bIdx + 1}</h4>
+                <label>題目敘述：</label>
+                <input type="text" class="q-title" value="${prefill ? prefill.q : ''}" placeholder="請輸入搶答題目">
+                <div class="opt-row">
+                    <div><label>🔴 選項一 (圓形)：</label><input type="text" class="q-opt-0" value="${prefill ? prefill.opts[0] : ''}" placeholder="答案一"></div>
+                    <div><label>🔵 選項二 (菱形)：</label><input type="text" class="q-opt-1" value="${prefill ? prefill.opts[1] : ''}" placeholder="答案二"></div>
+                    <div><label>🟡 選項三 (正方形)：</label><input type="text" class="q-opt-2" value="${prefill ? prefill.opts[2] : ''}" placeholder="答案三"></div>
+                    <div><label>🟢 選項四 (三角形)：</label><input type="text" class="q-opt-3" value="${prefill ? prefill.opts[3] : ''}" placeholder="答案四"></div>
+                </div>
+                <div style="margin-top:10px;">
+                    <label style="display:inline-block; margin-right:10px;">🎯 正確答案：</label>
+                    <select class="q-ans" style="display:inline-block; width:auto; min-width:150px;">
+                        <option value="0" ${prefill && prefill.ans===0 ? 'selected':''}>🔴 選項一 (圓形)</option>
+                        <option value="1" ${prefill && prefill.ans===1 ? 'selected':''}>🔵 選項二 (菱形)</option>
+                        <option value="2" ${prefill && prefill.ans===2 ? 'selected':''}>🟡 選項三 (正方形)</option>
+                        <option value="3" ${prefill && prefill.ans===3 ? 'selected':''}>🟢 選項四 (三角形)</option>
+                    </select>
+                </div>
+            `;
+            listContainer.appendChild(block);
+            localQuestionsCount++;
+        }
+
+        function downloadTemplate() {
+            const templateText = `答題時間\n0\n\n1\n題目\n\n選項A\n選項B VVV\n選項C\n選項D\n\n\n2\n題目\n\n選項A\n選項B\n選項C\n選項D VVV\n\n\n3\n題目\n\n選項A VVV\n選項B\n選項C\n選項D\n`;
+            const blob = new Blob([templateText], { type: "text/plain;charset=utf-8" });
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.href = URL.createObjectURL(blob);
+            downloadAnchor.setAttribute("download", `Template.txt`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function exportQuizSetToFile() {
+            compileAllInputs();
+            if(quizData.length === 0) { alert('請確認題目與四個選項皆有完整填寫！'); return; }
+            
+            let txtOutput = `答題時間\n${globalTimeLimit}\n\n`;
+            
+            quizData.forEach((q, idx) => {
+                txtOutput += `${idx + 1}\n`;
+                txtOutput += `${q.q}\n\n`;
+                txtOutput += `${q.opts[0]}${q.ans === 0 ? ' VVV' : ''}\n`;
+                txtOutput += `${q.opts[1]}${q.ans === 1 ? ' VVV' : ''}\n`;
+                txtOutput += `${q.opts[2]}${q.ans === 2 ? ' VVV' : ''}\n`;
+                txtOutput += `${q.opts[3]}${q.ans === 3 ? ' VVV' : ''}\n\n\n`;
+            });
+            
+            const blob = new Blob([txtOutput], { type: "text/plain;charset=utf-8" });
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.href = URL.createObjectURL(blob);
+            downloadAnchor.setAttribute("download", `kahoot_quiz_set_${Date.now()}.txt`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const text = e.target.result;
+                    const lines = text.split('\n').map(line => line.trim());
+                    
+                    let importedTimeLimit = 20;
+                    let importedQuestions = [];
+                    
+                    let i = 0;
+                    while (i < lines.length) {
+                        if (lines[i].includes('答題時間')) {
+                            i++;
+                            while(i < lines.length && lines[i] === '') i++;
+                            if (i < lines.length && !isNaN(lines[i])) {
+                                importedTimeLimit = parseInt(lines[i]);
+                            }
+                        }
+                        else if (/^\d+$/.test(lines[i])) { 
+                            i++;
+                            while(i < lines.length && lines[i] === '') i++;
+                            let qTitle = lines[i]; 
+                            
+                            i++;
+                            while(i < lines.length && lines[i] === '') i++;
+                            
+                            let opts = [];
+                            let ans = 0;
+                            for(let j=0; j<4; j++) {
+                                if(i < lines.length) {
+                                    let optText = lines[i];
+                                    if (optText.endsWith(' VVV')) {
+                                        ans = j;
+                                        optText = optText.substring(0, optText.length - 4).trim();
+                                    }
+                                    opts.push(optText);
+                                }
+                                i++;
+                            }
+                            
+                            if (qTitle && opts.length === 4) {
+                                importedQuestions.push({ q: qTitle, opts: opts, ans: ans });
+                            }
+                            continue;
+                        }
+                        i++;
+                    }
+                    
+                    if (importedQuestions.length === 0) throw new Error('找不到任何有效的題目格式');
+                    
+                    createNewQuizSetUI();
+                    document.getElementById('set-global-time').value = importedTimeLimit;
+                    document.getElementById('sub-questions-list').innerHTML = '';
+                    localQuestionsCount = 0;
+                    
+                    importedQuestions.forEach(q => addQuestionInnerBlock(q));
+                    alert(`📂 文字題組檔案載入完畢！共匯入 ${importedQuestions.length} 題。`);
+                    
+                } catch (error) {
+                    alert('匯入失敗！請確保檔案格式正確。\n錯誤訊息：' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function compileAllInputs() {
+            quizData = [];
+            const setDom = document.getElementById('current-quiz-set');
+            if(!setDom) return;
+            globalTimeLimit = parseInt(document.getElementById('set-global-time').value);
+            const blocks = setDom.querySelectorAll('.q-editor-block');
+            blocks.forEach(b => {
+                const title = b.querySelector('.q-title').value.trim();
+                const o0 = b.querySelector('.q-opt-0').value.trim();
+                const o1 = b.querySelector('.q-opt-1').value.trim();
+                const o2 = b.querySelector('.q-opt-2').value.trim();
+                const o3 = b.querySelector('.q-opt-3').value.trim();
+                const ans = parseInt(b.querySelector('.q-ans').value);
+                if(title && o0 && o1 && o2 && o3) {
+                    quizData.push({ q: title, opts: [o0, o1, o2, o3], ans: ans, timeLimit: globalTimeLimit });
+                }
+            });
+        }
+
+        let currentIdx = 0;
+        let role = ''; 
+        let peer = null;
+        let roomPin = '';
+        let connMap = new Map(); 
+        let playerData = {};     
+        let roundAnswers = {};   
+        let timerInterval = null;
+        let timeLeft = 20;
+        let totalTimeAllocated = 20;
+        let questionStartTime = 0;
+        let isAcceptingAnswers = false;
+        let myChart = null; 
+        let myConn = null;
+        let myNickname = '';
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            
+            const persistentPanel = document.getElementById('global-persistent-panel');
+            if (role === 'host' && screenId !== 'screen-host-lobby') {
+                persistentPanel.classList.add('visible');
+            } else {
+                persistentPanel.classList.remove('visible');
+            }
+        }
+
+        /* =====================================================================
+           主控端遊戲邏輯 (Host)
+           ===================================================================== */
+        function initHost() {
+            compileAllInputs();
+            if(quizData.length === 0) { alert('請確認至少填寫了一組完整題目！'); return; }
+            role = 'host';
+            switchScreen('screen-host-lobby');
+            roomPin = Math.floor(1000 + Math.random() * 9000).toString();
+            
+            document.getElementById('room-pin-text').innerText = roomPin;
+            document.getElementById('persist-pin-text').innerText = roomPin;
+
+            peer = new Peer('kahoot-room-' + roomPin);
+            peer.on('open', (id) => {
+                const joinUrl = `${window.location.origin}${window.location.pathname}?room=${roomPin}`;
+                
+                document.getElementById('qrcode').innerHTML = "";
+                new QRCode(document.getElementById('qrcode'), { text: joinUrl, width: 160, height: 160 });
+                
+                document.getElementById('persist-qrcode').innerHTML = "";
+                new QRCode(document.getElementById('persist-qrcode'), { text: joinUrl, width: 85, height: 85 });
+            });
+            peer.on('connection', (conn) => {
+                conn.on('data', (data) => handleHostReceivedData(conn, data));
+                conn.on('close', () => removePlayerFromState(conn.peer));
+            });
+        }
+
+        function handleHostReceivedData(conn, data) {
+            if (data.type === 'JOIN') {
+                let existingKey = null;
+                for (let key in playerData) {
+                    if (playerData[key].name === data.name) {
+                        existingKey = key;
+                        break;
+                    }
+                }
+
+                if (existingKey) {
+                    if (connMap.has(existingKey)) {
+                        conn.send({ type: 'JOIN_FAIL', reason: '❌ 此暱稱已在遊戲中，請更換其他暱稱！' });
+                        return;
+                    }
+                    
+                    playerData[conn.peer] = playerData[existingKey];
+                    if (existingKey !== conn.peer) {
+                        delete playerData[existingKey];
+                        if(roundAnswers[existingKey]) {
+                            roundAnswers[conn.peer] = roundAnswers[existingKey];
+                            delete roundAnswers[existingKey];
+                        }
+                    }
+                } else {
+                    playerData[conn.peer] = { name: data.name, score: 0, streak: 0, lastAnswerCorrect: false, lastScoreGained: 0 };
+                }
+
+                connMap.set(conn.peer, conn);
+                updatePlayerListsUI();
+                conn.send({ type: 'JOIN_ACK', success: true });
+                
+                if (isAcceptingAnswers) {
+                    let qItem = quizData[currentIdx];
+                    conn.send({ 
+                        type: 'START_QUESTION',
+                        qIdx: currentIdx + 1,
+                        qTotal: quizData.length,
+                        qTitle: qItem.q,
+                        qOpts: qItem.opts 
+                    });
+                }
+            }
+            if (data.type === 'SUBMIT_ANSWER') {
+                if (!isAcceptingAnswers || roundAnswers[conn.peer]) return;
+                let timeTaken = (Date.now() - questionStartTime) / 1000;
+                roundAnswers[conn.peer] = { optIndex: data.optIdx, timeTaken: timeTaken };
+                let answeredCount = Object.keys(roundAnswers).length;
+                document.getElementById('answer-counter').innerText = `已答題人數: ${answeredCount}`;
+                conn.send({ type: 'ANSWER_ACK' });
+                if (answeredCount >= connMap.size) endQuestion();
+            }
+        }
+
+        // 修改點 1：對線上玩家踢除時，不再刪除 playerData，僅斷開連線以保留歷史紀錄
+        function kickPlayer(peerId) {
+            const conn = connMap.get(peerId);
+            if (conn) {
+                conn.send({ type: 'KICKED' }); 
+                setTimeout(() => {
+                    conn.close();
+                    removePlayerFromState(peerId);
+                }, 100);
+            }
+        }
+
+        // 修改點 2：針對「已經離線」的玩家，提供真正刪除紀錄的選項
+        function deletePlayerRecord(peerId) {
+            if (confirm('確定要徹底清除這位離線玩家的紀錄嗎？\n清除後若同名加入將會重新計算積分。')) {
+                delete playerData[peerId];
+                updatePlayerListsUI();
+            }
+        }
+
+        // 僅移除當前連線狀態與作答等待區（保留歷史資料）
+        function removePlayerFromState(peerId) {
+            connMap.delete(peerId);
+            if (roundAnswers[peerId]) delete roundAnswers[peerId];
+            
+            updatePlayerListsUI();
+            
+            if (isAcceptingAnswers) {
+                let answeredCount = Object.keys(roundAnswers).length;
+                document.getElementById('answer-counter').innerText = `已答題人數: ${answeredCount}`;
+                if (connMap.size > 0 && answeredCount >= connMap.size) endQuestion();
+            }
+        }
+
+        function updatePlayerListsUI() {
+            let activeCount = 0;
+            const lobbyDom = document.getElementById('lobby-players');
+            if (lobbyDom) lobbyDom.innerHTML = '';
+            
+            const persistDom = document.getElementById('persist-players-dom');
+            if (persistDom) persistDom.innerHTML = '';
+
+            for (let id in playerData) {
+                let isOnline = connMap.has(id);
+                let pName = playerData[id].name;
+
+                if (isOnline) {
+                    activeCount++;
+                    if (lobbyDom) {
+                        let badge = document.createElement('div');
+                        badge.className = 'player-badge';
+                        // 在線玩家，點擊踢除僅斷線不刪資料
+                        badge.innerHTML = `<span>${pName}</span><button class="btn-kick" onclick="kickPlayer('${id}')" title="踢出遊戲 (保留積分)">✕</button>`;
+                        lobbyDom.appendChild(badge);
+                    }
+                    if (persistDom) {
+                        let pRow = document.createElement('div');
+                        pRow.className = 'p-list-item';
+                        pRow.innerHTML = `<span>${pName}</span><button class="btn-kick" style="width:20px; height:20px; font-size:11px;" onclick="kickPlayer('${id}')" title="踢出遊戲 (保留積分)">✕</button>`;
+                        persistDom.appendChild(pRow);
+                    }
+                } else {
+                    // 顯示離線狀態的玩家
+                    if (lobbyDom) {
+                        let badge = document.createElement('div');
+                        badge.className = 'player-badge offline';
+                        // 離線玩家，點擊✕則執行徹底刪除紀錄
+                        badge.innerHTML = `<span>${pName} (離線)</span><button class="btn-kick" onclick="deletePlayerRecord('${id}')" title="徹底刪除此紀錄">✕</button>`;
+                        lobbyDom.appendChild(badge);
+                    }
+                    if (persistDom) {
+                        let pRow = document.createElement('div');
+                        pRow.className = 'p-list-item offline';
+                        pRow.innerHTML = `<span>${pName} (離線)</span><button class="btn-kick" style="width:20px; height:20px; font-size:11px;" onclick="deletePlayerRecord('${id}')" title="徹底刪除此紀錄">✕</button>`;
+                        persistDom.appendChild(pRow);
+                    }
+                }
+            }
+
+            document.getElementById('player-count').innerText = activeCount;
+            document.getElementById('persist-count').innerText = activeCount;
+            document.getElementById('btn-start-game').style.display = activeCount > 0 ? 'inline-block' : 'none';
+        }
+
+        function startQuiz() { currentIdx = 0; showQuestion(); }
+
+        function showQuestion() {
+            isAcceptingAnswers = true;
+            roundAnswers = {};
+            let qItem = quizData[currentIdx];
+            timeLeft = qItem.timeLimit;
+            totalTimeAllocated = timeLeft === 0 ? 30 : timeLeft;
+
+            document.getElementById('chart-panel').style.display = 'none';
+            document.getElementById('host-timer').style.display = 'flex';
+            document.getElementById('host-quiz-progress').innerText = `題目 ${currentIdx + 1} / ${quizData.length}`;
+            
+            let footerHtml = `<span id="answer-counter" style="color:#666;">已答題人數: 0</span>`;
+            if (timeLeft === 0) {
+                document.getElementById('host-timer').innerText = "∞";
+                footerHtml += `<button class="btn-main" style="margin-top:0; margin-left:20px; background:var(--red); padding:8px 20px; font-size:16px;" onclick="endQuestion()">強制結束答題 ✕</button>`;
+            } else {
+                document.getElementById('host-timer').innerText = timeLeft;
+            }
+            document.getElementById('host-footer-btn-zone').innerHTML = footerHtml;
+            
+            switchScreen('screen-host-quiz');
+            document.getElementById('host-question').innerText = qItem.q;
+            
+            let optionsHtml = '';
+            const shapes = ['shape-0', 'shape-1', 'shape-2', 'shape-3'];
+            qItem.opts.forEach((opt, index) => {
+                optionsHtml += `
+                    <div class="option-card opt-${index}" id="opt-card-${index}">
+                        <span class="option-shape ${shapes[index]}"></span>
+                        <span class="opt-text-val">${opt}</span>
+                    </div>`;
+            });
+            document.getElementById('host-options').innerHTML = optionsHtml;
+
+            broadcast({ 
+                type: 'START_QUESTION', 
+                qIdx: currentIdx + 1, 
+                qTotal: quizData.length,
+                qTitle: qItem.q,
+                qOpts: qItem.opts 
+            });
+            questionStartTime = Date.now();
+            
+            clearInterval(timerInterval);
+            if (timeLeft > 0) {
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    document.getElementById('host-timer').innerText = timeLeft;
+                    if (timeLeft <= 0) endQuestion();
+                }, 1000);
+            }
+        }
+
+        function endQuestion() {
+            clearInterval(timerInterval);
+            isAcceptingAnswers = false;
+            let qItem = quizData[currentIdx];
+            let stats = [0, 0, 0, 0];
+            let voters = [[], [], [], []];
+
+            for (let id in playerData) {
+                let pAnswer = roundAnswers[id];
+                let pName = playerData[id].name;
+                if (pAnswer) {
+                    stats[pAnswer.optIndex]++; 
+                    voters[pAnswer.optIndex].push(pName); 
+                    if (pAnswer.optIndex === qItem.ans) {
+                        let t = Math.min(pAnswer.timeTaken, totalTimeAllocated);
+                        let baseScore = Math.round((1 - ((t / totalTimeAllocated) * 0.5)) * 1000);
+                        
+                        playerData[id].streak = (playerData[id].streak || 0) + 1;
+                        let streakBonus = 0;
+                        if (playerData[id].streak >= 2) {
+                            streakBonus = Math.min((playerData[id].streak - 1) * 100, 500);
+                        }
+                        let scoreGained = baseScore + streakBonus;
+
+                        playerData[id].score += scoreGained;
+                        playerData[id].lastScoreGained = scoreGained;
+                        playerData[id].lastAnswerCorrect = true;
+                    } else {
+                        playerData[id].streak = 0; 
+                        playerData[id].lastScoreGained = 0;
+                        playerData[id].lastAnswerCorrect = false;
+                    }
+                } else {
+                    playerData[id].streak = 0; 
+                    playerData[id].lastScoreGained = 0;
+                    playerData[id].lastAnswerCorrect = false;
+                }
+
+                let pConn = connMap.get(id);
+                if (pConn) {
+                    pConn.send({
+                        type: 'QUESTION_RESULT',
+                        isCorrect: playerData[id].lastAnswerCorrect,
+                        scoreGained: playerData[id].lastScoreGained,
+                        totalScore: playerData[id].score,
+                        streak: playerData[id].streak 
+                    });
+                }
+            }
+
+            document.getElementById('host-timer').style.display = 'none';
+            document.getElementById('chart-panel').style.display = 'block';
+            renderShapeChart(stats, voters);
+
+            qItem.opts.forEach((_, index) => {
+                let card = document.getElementById(`opt-card-${index}`);
+                if (index === qItem.ans) {
+                    card.classList.add('correct-highlight');
+                    card.innerHTML += ` <span style="margin-left:auto; font-size:28px;">✓</span>`;
+                } else {
+                    card.classList.add('fade-out');
+                }
+            });
+
+            const isFinalRound = (currentIdx === quizData.length - 1);
+            let nextBtnHtml = isFinalRound 
+                ? `<button class="btn-main" style="margin-top:0; padding:10px 30px; font-size:18px; background:var(--red);" onclick="showLeaderboard()">結束與排名 🏆</button>`
+                : `<button class="btn-main" style="margin-top:0; padding:10px 30px; font-size:18px; background:#0085ff;" onclick="nextQuestion()">下一題 ❯</button>`;
+
+            document.getElementById('host-footer-btn-zone').innerHTML = `
+                <button class="btn-main" style="margin-top:0; padding:10px 30px; font-size:18px;" onclick="showLeaderboard()">看目前排名 ❯</button>
+                ${nextBtnHtml}
+            `;
+        }
+
+        function renderShapeChart(dataValues, votersList) {
+            const ctx = document.getElementById('resultChart').getContext('2d');
+            if (myChart) { myChart.destroy(); } 
+            const shapeLabelsPlugin = {
+                id: 'shapeLabels',
+                afterDraw: (chart) => {
+                    const { ctx, scales: { x, y } } = chart;
+                    ctx.save();
+                    x.ticks.forEach((tick, index) => {
+                        const xPos = x.getPixelForTick(index);
+                        const yPos = y.bottom + 20; 
+                        const size = 18;            
+                        if (index === 0) {
+                            ctx.fillStyle = '#e21b3c'; ctx.beginPath(); ctx.arc(xPos, yPos, size/2, 0, 2 * Math.PI); ctx.fill();
+                        } else if (index === 1) {
+                            ctx.fillStyle = '#1368ce'; ctx.beginPath(); ctx.moveTo(xPos, yPos - size/2); ctx.lineTo(xPos + size/2, yPos); ctx.lineTo(xPos, yPos + size/2); ctx.lineTo(xPos - size/2, yPos); ctx.closePath(); ctx.fill();
+                        } else if (index === 2) {
+                            ctx.fillStyle = '#d89e00'; ctx.beginPath(); ctx.rect(xPos - size/2, yPos - size/2, size, size); ctx.fill();
+                        } else if (index === 3) {
+                            ctx.fillStyle = '#26890c'; ctx.beginPath(); ctx.moveTo(xPos, yPos - size/2); ctx.lineTo(xPos + size/2, yPos + size/2); ctx.lineTo(xPos - size/2, yPos + size/2); ctx.closePath(); ctx.fill();
+                        }
+                    });
+                    ctx.restore();
+                }
+            };
+
+            myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['', '', '', ''], 
+                    datasets: [{ data: dataValues, backgroundColor: ['#e21b3c', '#1368ce', '#d89e00', '#26890c'], borderRadius: 5 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { bottom: 25 } }, 
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (context) => ['圓形選項', '菱形選項', '正方形選項', '三角形選項'][context[0].dataIndex],
+                                label: (context) => {
+                                    let names = votersList[context.dataIndex];
+                                    return names.length === 0 ? " 無人選擇" : " 選擇者: " + names.join(', ');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1, color: '#333', font: { weight: 'bold', size: 14 } } },
+                        x: { grid: { display: false } }
+                    }
+                },
+                plugins: [shapeLabelsPlugin]
+            });
+        }
+
+        function showLeaderboard() {
+            switchScreen('screen-host-rank');
+            
+            let activePlayers = [];
+            let offlinePlayers = [];
+
+            for (let id in playerData) {
+                let p = {
+                    id: id,
+                    name: playerData[id].name,
+                    score: playerData[id].score,
+                    isOnline: connMap.has(id)
+                };
+                if (p.isOnline) {
+                    activePlayers.push(p);
+                } else {
+                    offlinePlayers.push(p);
+                }
+            }
+
+            activePlayers.sort((a,b) => b.score - a.score);
+            offlinePlayers.sort((a,b) => b.score - a.score);
+
+            const isFinalRound = (currentIdx === quizData.length - 1);
+
+            if(isFinalRound) {
+                document.getElementById('rank-title').innerText = "🏆 最終大排行 🏆";
+                document.getElementById('btn-next').innerText = "回首頁 ↺";
+                
+                activePlayers.forEach((p, idx) => {
+                    let pConn = connMap.get(p.id);
+                    if (pConn) {
+                        pConn.send({ type: 'FINAL_結算', finalRank: idx + 1, finalScore: p.score });
+                    }
+                });
+            } else {
+                document.getElementById('rank-title').innerText = `目前積分榜 (完賽進度: ${currentIdx + 1} / ${quizData.length})`;
+                document.getElementById('btn-next').innerText = "下一題 ❯";
+            }
+
+            let rankHtml = '';
+            
+            activePlayers.forEach((p, idx) => {
+                let crown = idx === 0 ? '👑 ' : '';
+                rankHtml += `
+                    <div class="leaderboard-item">
+                        <span>${crown}${idx+1}. ${p.name}</span>
+                        <span>${p.score} pts</span>
+                    </div>`;
+            });
+
+            offlinePlayers.forEach(p => {
+                rankHtml += `
+                    <div class="leaderboard-item offline-player">
+                        <span>(已離線) ${p.name}</span>
+                        <span>${p.score} pts</span>
+                    </div>`;
+            });
+
+            document.getElementById('leaderboard-dom').innerHTML = rankHtml;
+        }
+
+        function nextQuestion() {
+            if(currentIdx < quizData.length - 1) {
+                currentIdx++;
+                showQuestion();
+            } else {
+                location.reload();
+            }
+        }
+
+        function broadcast(msg) { connMap.forEach(conn => conn.send(msg)); }
+
+        /* =====================================================================
+           玩家手機端邏輯 (Player)
+           ===================================================================== */
+        function connectToHost() {
+            let pin = document.getElementById('pad-pin-input').value.trim();
+            myNickname = document.getElementById('pad-name-input').value.trim();
+            if(!pin || !myNickname) { alert('請填入房間 ID 與暱稱！'); return; }
+            
+            const loginBtn = document.querySelector("#screen-pad-login .btn-main");
+            const originalText = loginBtn.innerText;
+            loginBtn.innerText = "⏳ 正在連線中...";
+            loginBtn.disabled = true;
+
+            role = 'player';
+            peer = new Peer();
+            peer.on('open', (id) => {
+                myConn = peer.connect('kahoot-room-' + pin);
+                myConn.on('open', () => myConn.send({ type: 'JOIN', name: myNickname }));
+                myConn.on('data', (data) => handlePlayerReceivedData(data));
+                myConn.on('close', () => { 
+                    console.log('與主台連線中斷...');
+                });
+            });
+            peer.on('error', (err) => {
+                alert('找不到該房間，請確認房間 ID 是否正確。');
+                loginBtn.innerText = originalText;
+                loginBtn.disabled = false;
+            });
+        }
+
+        function handlePlayerReceivedData(data) {
+            if (data.type === 'JOIN_FAIL') {
+                alert(data.reason);
+                const loginBtn = document.querySelector("#screen-pad-login .btn-main");
+                if (loginBtn) { loginBtn.innerText = "進入遊戲"; loginBtn.disabled = false; }
+                if (peer) { peer.destroy(); }
+                return;
+            }
+            if (data.type === 'JOIN_ACK') {
+                const loginBtn = document.querySelector("#screen-pad-login .btn-main");
+                if (loginBtn) { loginBtn.innerText = "進入遊戲"; loginBtn.disabled = false; }
+                
+                document.getElementById('display-player-name').innerText = myNickname;
+                document.getElementById('player-nickname-badge').style.display = 'block';
+
+                switchScreen('screen-pad-wait');
+                document.getElementById('pad-wait-msg').innerText = "成功加入！等待房長發布題目...";
+            }
+            if (data.type === 'START_QUESTION') {
+                switchScreen('screen-pad-game');
+                
+                document.getElementById('pad-header-index').innerText = `題目 ${data.qIdx} / ${data.qTotal}`;
+                document.getElementById('pad-header-title').innerText = data.qTitle;
+
+                document.querySelectorAll('.pad-btn').forEach((b, index) => {
+                    b.disabled = false;
+                    const textSpan = b.querySelector('.pad-opt-text');
+                    if (textSpan && data.qOpts && data.qOpts[index]) {
+                        textSpan.innerText = data.qOpts[index];
+                    }
+                });
+            }
+            if (data.type === 'ANSWER_ACK') {
+                switchScreen('screen-pad-wait');
+                document.getElementById('pad-wait-msg').innerText = "傳送成功！等待大螢幕時間結束...";
+            }
+            if (data.type === 'QUESTION_RESULT') {
+                switchScreen('screen-pad-result');
+                const resBg = data.isCorrect ? 'var(--green)' : 'var(--red)';
+                document.getElementById('screen-pad-result').style.backgroundColor = resBg;
+                
+                document.getElementById('pad-result-title').innerText = data.isCorrect ? '答對了！🎉' : '答錯了！❌';
+                
+                const streakDom = document.getElementById('pad-result-streak');
+                if (data.isCorrect && data.streak >= 2) {
+                    streakDom.innerText = `🔥 連續答對 ${data.streak} 題！ 🔥`;
+                    streakDom.style.display = 'block';
+                    
+                    streakDom.style.animation = 'none';
+                    streakDom.offsetHeight; /* trigger reflow */
+                    streakDom.style.animation = 'pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                } else {
+                    streakDom.style.display = 'none';
+                }
+
+                document.getElementById('pad-result-score').innerText = `本題得分: +${data.scoreGained} \n總積分: ${data.totalScore}`;
+            }
+            if (data.type === 'FINAL_結算') {
+                switchScreen('screen-pad-final');
+                let rankStr = data.finalRank <= 3 ? `🏆 恭喜獲得第 ${data.finalRank} 名！` : `🎉 順利完賽！獲得第 ${data.finalRank} 名`;
+                document.getElementById('pad-final-rank').innerText = rankStr;
+                document.getElementById('pad-final-score').innerText = `總積分: ${data.finalScore} pts`;
+            }
+            if (data.type === 'KICKED') {
+                alert('您已被房長移出房間。');
+                location.reload(); 
+            }
+        }
+
+        document.querySelector('.pad-grid').addEventListener('click', (e) => {
+            let btn = e.target.closest('.pad-btn');
+            if(!btn || btn.disabled) return;
+            document.querySelectorAll('.pad-btn').forEach(b => b.disabled = true);
+            let optIdx = Array.from(document.querySelectorAll('.pad-btn')).indexOf(btn);
+            if (myConn) myConn.send({ type: 'SUBMIT_ANSWER', optIdx: optIdx });
+        });
+    </script>
+</body>
+</html>
